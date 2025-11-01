@@ -34,6 +34,7 @@ Automated MySQL database backup scripts for Plesk servers.
 - Automatically removes orphaned backup files for deleted databases
 - Enhanced error handling and detailed logging
 - Success/failure tracking with exit codes
+- Self-update capability for automatic script updates
 
 [Learn more →](./mysql-backups)
 
@@ -48,6 +49,7 @@ Automatically clean up old WordPress backup files to free up disk space.
 - Safe deletion with proper error handling
 - Detailed logging with timestamps
 - Exit codes for automation and monitoring
+- Self-update capability for automatic script updates
 
 [Learn more →](./remove-old-wordpress-backups)
 
@@ -83,6 +85,40 @@ Automatically clean up old WordPress backup files to free up disk space.
 
 ## Usage
 
+### Self-Update Feature
+
+All Linux scripts include built-in self-update capability to ensure you're always running the latest version from GitHub.
+
+**Manual update:**
+```bash
+# Update the script to the latest version
+./mysql-backups/mysql-backup.sh --update
+./remove-old-wordpress-backups/remove-wordpress-backups.sh --update
+```
+
+**Automatic updates (recommended for cron):**
+```bash
+# Enable auto-update with environment variable
+AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+
+# Configure in cron for automatic updates
+0 2 * * * AUTO_UPDATE=true /path/to/plesk-scripts/mysql-backups/mysql-backup.sh
+```
+
+**Configuration:**
+- `AUTO_UPDATE` - Set to `true` to enable automatic updates (default: `false`)
+- `UPDATE_CHECK_INTERVAL` - Hours between update checks (default: `24`)
+- `GITHUB_BRANCH` - GitHub branch to update from (default: `main`)
+
+**How it works:**
+1. Each script contains embedded self-update functionality (no external dependencies)
+2. When enabled, scripts check for updates from the GitHub repository
+3. If a newer version is found, it's downloaded and validated
+4. The current version is backed up to `<script-name>.backup`
+5. The new version is installed atomically
+6. The script restarts automatically with the updated version
+7. Works silently in cron with no user interaction required
+
 ### MySQL Backup Scripts
 
 **Linux:**
@@ -90,8 +126,11 @@ Automatically clean up old WordPress backup files to free up disk space.
 # Run backup manually
 ./mysql-backups/mysql-backup.sh
 
-# Schedule with cron (daily at 2 AM)
-0 2 * * * /path/to/plesk-scripts/mysql-backups/mysql-backup.sh
+# Run backup with auto-update enabled
+AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+
+# Schedule with cron (daily at 2 AM with auto-update)
+0 2 * * * AUTO_UPDATE=true /path/to/plesk-scripts/mysql-backups/mysql-backup.sh
 ```
 
 **Windows:**
@@ -113,8 +152,11 @@ mysql-backups\mysql-backup.bat
 # Run with custom retention period (e.g., 180 days)
 DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 
-# Schedule with cron (weekly on Sundays at 3 AM)
-0 3 * * 0 /path/to/plesk-scripts/remove-old-wordpress-backups/remove-wordpress-backups.sh
+# Run with auto-update enabled
+AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
+
+# Schedule with cron (weekly on Sundays at 3 AM with auto-update)
+0 3 * * 0 AUTO_UPDATE=true /path/to/plesk-scripts/remove-old-wordpress-backups/remove-wordpress-backups.sh
 ```
 
 ## Configuration
@@ -142,8 +184,36 @@ Set the `DAYS` environment variable to customize the retention period:
 3. **Verify backups** - Regularly test backup restoration procedures
 4. **Schedule wisely** - Run backups during off-peak hours to minimize server load
 5. **Review logs** - Check cron logs or Task Scheduler history for script execution status
+6. **Enable auto-update** - Set `AUTO_UPDATE=true` in cron jobs to keep scripts up-to-date automatically
+7. **Check update logs** - Review `[UPDATE]` log entries to confirm successful updates
 
 ## Troubleshooting
+
+### Self-Update Issues
+
+**Problem:** Script cannot download updates
+```bash
+# Verify curl or wget is installed
+which curl wget
+
+# Test GitHub connectivity
+curl -I https://raw.githubusercontent.com/architecpoint/plesk-scripts/main/README.md
+```
+
+**Problem:** Update check happens too frequently
+```bash
+# Increase check interval to 7 days (168 hours)
+UPDATE_CHECK_INTERVAL=168 AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+
+# Or disable auto-update and use manual updates
+./mysql-backups/mysql-backup.sh --update
+```
+
+**Problem:** Script updated but using wrong branch
+```bash
+# Specify branch explicitly (e.g., develop, main)
+GITHUB_BRANCH=develop AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+```
 
 ### MySQL Backup Issues
 
