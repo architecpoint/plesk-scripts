@@ -1,31 +1,24 @@
-#!/bin/sh
-#
-# MySQL Database Backup Script for Plesk Servers (Linux)
-# 
-# This script backs up all MySQL databases on a Plesk server, excluding system databases.
-# It uses a PID file to prevent multiple instances from running simultaneously.
-#
+#!/bin/bash
+# Purpose: Automated MySQL database backup for Plesk servers with PID locking
+# Platform: Linux
 # Features:
-# - Prevents concurrent execution using PID file
-# - Backs up all databases except system databases
-# - Creates individual SQL dump files per database
-# - Proper error handling and logging
-# - Restrictive file permissions for security
-#
-# Usage:
-#   ./mysql-backup.sh
-#
-# Exit codes:
-#   0 - Success
-#   1 - Error (database connection failed, backup failed, etc.)
-#
+#   - Prevents concurrent execution using PID file
+#   - Backs up all databases except system databases (information_schema, performance_schema, phpmyadmin)
+#   - Creates individual SQL dump files per database
+#   - Automatically removes orphaned backup files for deleted databases
+#   - Proper error handling and detailed logging
+#   - Restrictive file permissions for security (600)
+# Usage: ./mysql-backup.sh
+# Environment Variables:
+#   None - Uses hardcoded paths compatible with Plesk
+# Security: Uses Plesk's built-in 'plesk db' command for authenticated database access
 
-set -e
+set -euo pipefail
 
 # Configuration
-HOME="/backup/mysql"
-FOLDER="${HOME}/data"
-PID="${HOME}/mysql.pid"
+BACKUP_BASE="/backup/mysql"
+FOLDER="${BACKUP_BASE}/data"
+PID="${BACKUP_BASE}/mysql.pid"
 DB_LIST="${FOLDER}/dbs.txt"
 PLESK_BIN="/usr/sbin/plesk"
 
