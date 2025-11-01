@@ -45,6 +45,7 @@ Automatically clean up old WordPress backup files to free up disk space.
 **Features:**
 - Scans all WordPress installations in Plesk vhosts
 - Removes backups older than a specified number of days (default: 365 days)
+- Dry-run mode to preview deletions without removing files
 - Configurable retention period via environment variables
 - Safe deletion with proper error handling
 - Detailed logging with timestamps
@@ -146,11 +147,17 @@ mysql-backups\mysql-backup.bat
 ### Remove Old WordPress Backups
 
 ```bash
+# Preview what would be deleted without actually removing files (dry-run mode)
+./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
+
 # Run with default settings (removes backups older than 365 days)
 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 
 # Run with custom retention period (e.g., 180 days)
 DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
+
+# Preview custom retention period before deleting
+DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
 
 # Run with auto-update enabled
 AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
@@ -173,19 +180,26 @@ AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 
 ### WordPress Backup Cleanup Configuration
 
-Set the `DAYS` environment variable to customize the retention period:
-- Default: `365` days
-- Example: `DAYS=180` keeps backups for 6 months
+**Environment Variables:**
+- `DAYS` - Number of days to keep backups (default: `365`)
+  - Example: `DAYS=180` keeps backups for 6 months
+- `DRY_RUN` - Set to `true` to enable dry-run mode (default: `false`)
+  - Example: `DRY_RUN=true` previews deletions without removing files
+
+**Command-line Options:**
+- `--dry-run` or `-n` - Preview deletions without removing files
+- `--update` or `--self-update` - Update script to latest version from GitHub
 
 ## Best Practices
 
 1. **Test scripts first** - Always test scripts in a non-production environment before deploying
-2. **Monitor disk space** - Ensure adequate storage for database backups
-3. **Verify backups** - Regularly test backup restoration procedures
-4. **Schedule wisely** - Run backups during off-peak hours to minimize server load
-5. **Review logs** - Check cron logs or Task Scheduler history for script execution status
-6. **Enable auto-update** - Set `AUTO_UPDATE=true` in cron jobs to keep scripts up-to-date automatically
-7. **Check update logs** - Review `[UPDATE]` log entries to confirm successful updates
+2. **Use dry-run mode** - Preview deletions with `--dry-run` flag before running cleanup scripts
+3. **Monitor disk space** - Ensure adequate storage for database backups
+4. **Verify backups** - Regularly test backup restoration procedures
+5. **Schedule wisely** - Run backups during off-peak hours to minimize server load
+6. **Review logs** - Check cron logs or Task Scheduler history for script execution status
+7. **Enable auto-update** - Set `AUTO_UPDATE=true` in cron jobs to keep scripts up-to-date automatically
+8. **Check update logs** - Review `[UPDATE]` log entries to confirm successful updates
 
 ## Troubleshooting
 
@@ -231,10 +245,20 @@ chmod +x mysql-backup.sh
 
 ### WordPress Backup Cleanup Issues
 
+**Problem:** Want to verify what will be deleted before running
+```bash
+# Use dry-run mode to preview deletions
+./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
+
+# Or with environment variable
+DRY_RUN=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
+```
+
 **Problem:** Files not being deleted
 - Check the backup path exists: `/var/www/vhosts/*/wordpress-backups`
 - Verify file permissions for the script user
 - Ensure correct `DAYS` value is set
+- Run with `--dry-run` flag to see what would be deleted
 
 ## Security Considerations
 
