@@ -31,6 +31,8 @@ Automated MySQL database backup scripts for Plesk servers.
 - Uses Plesk's MySQL credentials
 - Creates individual SQL dump files per database
 - Excludes system databases (information_schema, performance_schema, phpmyadmin)
+- Enhanced error handling and detailed logging
+- Success/failure tracking with exit codes
 
 [Learn more →](./mysql-backups)
 
@@ -43,6 +45,8 @@ Automatically clean up old WordPress backup files to free up disk space.
 - Removes backups older than a specified number of days (default: 365 days)
 - Configurable retention period via environment variables
 - Safe deletion with proper error handling
+- Detailed logging with timestamps
+- Exit codes for automation and monitoring
 
 [Learn more →](./remove-old-wordpress-backups)
 

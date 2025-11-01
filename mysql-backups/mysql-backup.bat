@@ -4,52 +4,139 @@ REM MySQL Database Backup Script for Plesk Servers (Windows)
 REM 
 REM This script backs up all MySQL databases on a Windows Plesk server.
 REM 
-REM IMPORTANT: Replace <password_for_mysql> with your actual MySQL admin 
-REM            password before running this script.
+REM SECURITY WARNING: Replace <password_for_mysql> with your actual MySQL 
+REM                   admin password before running this script.
 REM
 REM Features:
 REM - Retrieves list of all databases
 REM - Backs up each database to individual SQL dump files
+REM - Excludes system databases (information_schema, performance_schema, phpmyadmin)
 REM - Uses Plesk MySQL utilities
+REM - Proper error handling and logging
+REM
+REM Usage:
+REM   mysql-backup.bat
 REM ============================================================================
 
-REM Check if plesk_dir environment variable is set
+setlocal enabledelayedexpansion
+
+REM Configuration
+set "BACKUP_DIR=%plesk_dir%\Databases\MySQL\backup"
+set "DB_LIST=%BACKUP_DIR%\db_list.txt"
+set "MYSQL_BIN=%plesk_dir%\MySQL\bin\mysql.exe"
+set "MYSQLDUMP_BIN=%plesk_dir%\MySQL\bin\mysqldump.exe"
+set "MYSQL_USER=admin"
+set "MYSQL_PASSWORD=<password_for_mysql>"
+set "MYSQL_PORT=3306"
+
+REM Validate environment
 if not defined plesk_dir (
     echo ERROR: plesk_dir environment variable is not set
+    echo Please ensure Plesk is properly installed and environment is configured.
+    exit /b 1
+)
+
+REM Verify MySQL binaries exist
+if not exist "%MYSQL_BIN%" (
+    echo ERROR: MySQL client not found at: %MYSQL_BIN%
+    exit /b 1
+)
+
+if not exist "%MYSQLDUMP_BIN%" (
+    echo ERROR: mysqldump utility not found at: %MYSQLDUMP_BIN%
     exit /b 1
 )
 
 REM Create backup directory if it doesn't exist
-if not exist "%plesk_dir%\Databases\MySQL\backup\" (
-    mkdir "%plesk_dir%\Databases\MySQL\backup\"
-)
-
-REM Get list of all databases
-echo Retrieving list of databases...
-"%plesk_dir%\MySQL\bin\mysql.exe" -uadmin -p<password_for_mysql> -P3306 -Ne"SHOW DATABASES" > "%plesk_dir%\Databases\MySQL\backup\db_list.txt"
-
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to retrieve database list. Please check MySQL credentials.
-    exit /b 1
-)
-
-REM Change to backup directory
-cd /d "%plesk_dir%\Databases\MySQL\backup"
-
-echo Starting database backup...
-
-REM Loop through each database and create backup
-for /F "tokens=1,2* " %%j in (db_list.txt) do (
-    echo Backing up database: %%j
-    "%plesk_dir%\MySQL\bin\mysqldump.exe" -uadmin -p<password_for_mysql> -P3306 --routines --databases %%j > "%plesk_dir%\Databases\MySQL\backup\%%j.sql"
-    
+if not exist "%BACKUP_DIR%\" (
+    echo Creating backup directory: %BACKUP_DIR%
+    mkdir "%BACKUP_DIR%"
     if %errorlevel% neq 0 (
-        echo ERROR: Failed to backup database: %%j
-    ) else (
-        echo Successfully backed up: %%j
+        echo ERROR: Failed to create backup directory
+        exit /b 1
     )
 )
 
-echo Database backup completed successfully
+echo ============================================================================
+echo MySQL Database Backup - Starting
+echo ============================================================================
+echo Backup directory: %BACKUP_DIR%
+echo.
+
+REM Get list of all databases
+echo Retrieving list of databases...
+"%MYSQL_BIN%" -u%MYSQL_USER% -p%MYSQL_PASSWORD% -P%MYSQL_PORT% -Ne"SHOW DATABASES" > "%DB_LIST%" 2>&1
+
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to retrieve database list. Please check MySQL credentials.
+    echo Hint: Replace ^<password_for_mysql^> with your actual MySQL admin password.
+    if exist "%DB_LIST%" del /q "%DB_LIST%"
+    exit /b 1
+)
+
+REM Count databases to backup
+set "DB_COUNT=0"
+set "SUCCESS_COUNT=0"
+set "FAILED_COUNT=0"
+
+REM Change to backup directory
+cd /d "%BACKUP_DIR%"
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to change to backup directory
+    exit /b 1
+)
+
+echo Starting database backup...
+echo.
+
+REM Loop through each database and create backup
+for /F "tokens=1,2* " %%j in (%DB_LIST%) do (
+    set "DB_NAME=%%j"
+    
+    REM Skip system databases
+    if /i "!DB_NAME!"=="information_schema" (
+        echo Skipping system database: !DB_NAME!
+    ) else if /i "!DB_NAME!"=="performance_schema" (
+        echo Skipping system database: !DB_NAME!
+    ) else if /i "!DB_NAME!"=="phpmyadmin" (
+        echo Skipping system database: !DB_NAME!
+    ) else (
+        set /a DB_COUNT+=1
+        echo [!DB_COUNT!] Backing up database: !DB_NAME!
+        
+        REM Delete old backup if it exists
+        if exist "!DB_NAME!.sql" del /q "!DB_NAME!.sql"
+        
+        REM Create backup with routines and databases flag
+        "%MYSQLDUMP_BIN%" -u%MYSQL_USER% -p%MYSQL_PASSWORD% -P%MYSQL_PORT% --routines --databases !DB_NAME! > "!DB_NAME!.sql" 2>&1
+        
+        if !errorlevel! neq 0 (
+            echo     ERROR: Failed to backup database: !DB_NAME!
+            set /a FAILED_COUNT+=1
+        ) else (
+            echo     Successfully backed up: !DB_NAME!
+            set /a SUCCESS_COUNT+=1
+        )
+    )
+)
+
+REM Clean up database list file
+if exist "%DB_LIST%" del /q "%DB_LIST%"
+
+echo.
+echo ============================================================================
+echo MySQL Database Backup - Completed
+echo ============================================================================
+echo Total databases processed: %DB_COUNT%
+echo Successful backups: %SUCCESS_COUNT%
+echo Failed backups: %FAILED_COUNT%
+echo Backup location: %BACKUP_DIR%
+echo ============================================================================
+
+REM Exit with error code if any backups failed
+if %FAILED_COUNT% gtr 0 (
+    exit /b 1
+)
+
 exit /b 0
 
