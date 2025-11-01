@@ -1,22 +1,16 @@
-#!/bin/sh
-#
-# WordPress Backup Cleanup Script for Plesk Servers
-#
-# This script removes old WordPress backup files from all Plesk virtual hosts
-# to free up disk space. It searches for backup files older than a specified
-# number of days and deletes them safely.
-#
-# Usage:
-#   ./remove-wordpress-backups.sh
-#   DAYS=180 ./remove-wordpress-backups.sh  # Custom retention period
-#
+#!/bin/bash
+# Purpose: Automated cleanup of old WordPress backup files in Plesk virtual hosts
+# Platform: Linux
+# Features:
+#   - Scans all WordPress installations in Plesk vhosts for backup files
+#   - Removes backups older than specified retention period
+#   - Configurable retention via DAYS environment variable (default: 365 days)
+#   - Safe deletion with proper error handling and validation
+#   - Detailed logging with timestamps
+#   - Exit codes for automation and monitoring
+# Usage: ./remove-wordpress-backups.sh or DAYS=180 ./remove-wordpress-backups.sh
 # Environment Variables:
 #   DAYS - Number of days to keep backups (default: 365)
-#
-# Exit codes:
-#   0 - Success
-#   1 - Error (invalid parameters, permission issues, etc.)
-#
 
 set -euo pipefail
 
@@ -80,7 +74,7 @@ remove_wordpress_backups() {
     
     # Count files before deletion
     local file_count
-    file_count=$(${FIND_CMD} ${BACKUP_PATH} -type f -mtime +${DAYS} 2>/dev/null | wc -l) || file_count=0
+    file_count=$(${FIND_CMD} ${BACKUP_PATH} -type f -mtime +"${DAYS}" 2>/dev/null | wc -l) || file_count=0
     
     if [ "${file_count}" -eq 0 ]; then
         log_message "No backup files older than ${DAYS} days found. Nothing to delete."
@@ -90,7 +84,7 @@ remove_wordpress_backups() {
     log_message "Found ${file_count} backup file(s) to delete."
     
     # Remove old backup files
-    if ${FIND_CMD} ${BACKUP_PATH} -type f -mtime +${DAYS} -exec ${RM_CMD} -f {} + 2>/dev/null; then
+    if ${FIND_CMD} ${BACKUP_PATH} -type f -mtime +"${DAYS}" -exec ${RM_CMD} -f {} + 2>/dev/null; then
         log_message "Successfully removed ${file_count} old backup file(s)."
     else
         log_message "ERROR: Failed to remove some backup files. Check permissions."

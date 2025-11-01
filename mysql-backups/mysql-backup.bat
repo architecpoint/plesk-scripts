@@ -1,21 +1,18 @@
 @echo off
 REM ============================================================================
-REM MySQL Database Backup Script for Plesk Servers (Windows)
-REM 
-REM This script backs up all MySQL databases on a Windows Plesk server.
-REM 
-REM SECURITY WARNING: Replace <password_for_mysql> with your actual MySQL 
-REM                   admin password before running this script.
-REM
+REM Purpose: Automated MySQL database backup for Plesk servers
+REM Platform: Windows
 REM Features:
-REM - Retrieves list of all databases
-REM - Backs up each database to individual SQL dump files
-REM - Excludes system databases (information_schema, performance_schema, phpmyadmin)
-REM - Uses Plesk MySQL utilities
-REM - Proper error handling and logging
-REM
-REM Usage:
-REM   mysql-backup.bat
+REM   - Backs up all MySQL databases to individual SQL dump files
+REM   - Excludes system databases (information_schema, performance_schema, phpmyadmin)
+REM   - Automatically removes orphaned backup files for deleted databases
+REM   - Uses Plesk MySQL utilities with proper path handling for spaces/parentheses
+REM   - Enhanced error handling and detailed logging
+REM   - Success/failure tracking with exit codes
+REM Usage: mysql-backup.bat
+REM Environment Variables:
+REM   plesk_dir - Plesk installation directory (required, auto-set by Plesk)
+REM Security: Replace <password_for_mysql> with actual MySQL admin password before running
 REM ============================================================================
 
 setlocal enabledelayedexpansion
