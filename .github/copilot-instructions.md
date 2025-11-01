@@ -16,6 +16,13 @@ Scripts come in pairs: `.bat` (Windows) and `.sh` (Linux). When modifying functi
 - Windows scripts use `%plesk_dir%` environment variable for Plesk paths
 - Linux scripts use hardcoded `/usr/sbin/plesk` CLI tool and `/backup/` paths
 
+### Windows Path Handling
+Windows Plesk paths often contain spaces and special characters (e.g., `C:\Program Files (x86)\Plesk`). When writing or modifying `.bat` scripts:
+- **Always use delayed expansion** (`setlocal enabledelayedexpansion`) and reference variables with `!variable!` instead of `%variable%` to handle parentheses in paths
+- **Quote all path references**: Use `"!VARIABLE!"` when referencing paths in commands and conditionals
+- **Use `usebackq` in FOR loops**: When reading files with `for /F`, use `for /F "usebackq tokens=*" %%i in ("!FILE!")` to properly handle quoted filenames with spaces
+- **Test with spaces**: Always test batch scripts with paths containing spaces and parentheses to ensure proper handling
+
 ### Security-Sensitive Credentials
 - **Windows MySQL scripts**: Use placeholder `<password_for_mysql>` that users must replace manually
 - **Linux MySQL scripts**: Leverage Plesk's built-in `plesk db` command (auto-authenticated)
