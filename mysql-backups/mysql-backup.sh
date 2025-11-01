@@ -33,6 +33,7 @@ PLESK_BIN="/usr/sbin/plesk"
 DB_COUNT=0
 SUCCESS_COUNT=0
 FAILED_COUNT=0
+CLEANUP_COUNT=0
 
 # Function to cleanup on exit
 cleanup() {
@@ -105,6 +106,32 @@ if [ ! -s "${DB_LIST}" ]; then
     exit 0
 fi
 
+# Clean up backup files for databases that no longer exist
+log_message "Checking for orphaned backup files..."
+if [ -d "${FOLDER}" ]; then
+    for backup_file in "${FOLDER}"/*.sql; do
+        # Skip if no .sql files exist (glob doesn't match anything)
+        [ -e "${backup_file}" ] || continue
+        
+        # Extract database name from filename (remove path and .sql extension)
+        db_name=$(basename "${backup_file}" .sql)
+        
+        # Check if this database still exists in our current database list
+        if ! grep -q "^${db_name}$" "${DB_LIST}"; then
+            log_message "Removing orphaned backup: ${db_name}.sql (database no longer exists)"
+            /bin/rm -f "${backup_file}"
+            CLEANUP_COUNT=$((CLEANUP_COUNT + 1))
+        fi
+    done
+    
+    if [ "${CLEANUP_COUNT}" -eq 0 ]; then
+        log_message "No orphaned backup files found"
+    else
+        log_message "Cleaned up ${CLEANUP_COUNT} orphaned backup file(s)"
+    fi
+fi
+echo ""
+
 log_message "Starting database backup..."
 echo ""
 
@@ -141,6 +168,7 @@ log_message "===================================================================
 log_message "Total databases processed: ${DB_COUNT}"
 log_message "Successful backups: ${SUCCESS_COUNT}"
 log_message "Failed backups: ${FAILED_COUNT}"
+log_message "Orphaned backups cleaned: ${CLEANUP_COUNT}"
 log_message "Backup location: ${FOLDER}"
 log_message "============================================================================"
 

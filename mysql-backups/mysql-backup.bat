@@ -78,6 +78,7 @@ REM Count databases to backup
 set "DB_COUNT=0"
 set "SUCCESS_COUNT=0"
 set "FAILED_COUNT=0"
+set "CLEANUP_COUNT=0"
 
 REM Change to backup directory
 cd /d "%BACKUP_DIR%"
@@ -87,6 +88,35 @@ if %errorlevel% neq 0 (
 )
 
 echo Starting database backup...
+echo.
+
+REM Clean up backup files for databases that no longer exist
+echo Checking for orphaned backup files...
+for %%f in ("%BACKUP_DIR%\*.sql") do (
+    set "BACKUP_FILE=%%~nf"
+    set "FOUND=0"
+    
+    REM Check if this database still exists in the database list
+    for /F "tokens=1,2* " %%j in (%DB_LIST%) do (
+        set "CURRENT_DB=%%j"
+        if /i "!BACKUP_FILE!"=="!CURRENT_DB!" set "FOUND=1"
+    )
+    
+    REM If database not found in list, delete the backup file
+    if !FOUND! equ 0 (
+        if /i not "!BACKUP_FILE!"=="db_list" (
+            echo Removing orphaned backup: !BACKUP_FILE!.sql (database no longer exists)
+            del /q "%%f"
+            set /a CLEANUP_COUNT+=1
+        )
+    )
+)
+
+if %CLEANUP_COUNT% equ 0 (
+    echo No orphaned backup files found
+) else (
+    echo Cleaned up %CLEANUP_COUNT% orphaned backup file(s)
+)
 echo.
 
 REM Loop through each database and create backup
@@ -130,6 +160,7 @@ echo ===========================================================================
 echo Total databases processed: %DB_COUNT%
 echo Successful backups: %SUCCESS_COUNT%
 echo Failed backups: %FAILED_COUNT%
+echo Orphaned backups cleaned: %CLEANUP_COUNT%
 echo Backup location: %BACKUP_DIR%
 echo ============================================================================
 

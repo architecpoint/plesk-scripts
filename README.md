@@ -31,6 +31,7 @@ Automated MySQL database backup scripts for Plesk servers.
 - Uses Plesk's MySQL credentials
 - Creates individual SQL dump files per database
 - Excludes system databases (information_schema, performance_schema, phpmyadmin)
+- Automatically removes orphaned backup files for deleted databases
 - Enhanced error handling and detailed logging
 - Success/failure tracking with exit codes
 

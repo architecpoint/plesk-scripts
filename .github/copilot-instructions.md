@@ -50,6 +50,7 @@ No automated test suite. When modifying scripts:
 **Adding new backup types**: Create new directory, include both `.bat` and `.sh`, follow existing error handling patterns
 **Changing retention logic**: Modify `DAYS` default or add new env vars (document in script comments and README)
 **Path customization**: Update hardcoded paths (`/backup/mysql/`, `%plesk_dir%\Databases`) at top of scripts for easy configuration
+**Feature additions**: When adding new features to scripts, always update the README.md to document the changes in the relevant Features section
 
 ## Documentation Standard
 
@@ -58,3 +59,9 @@ Script headers must include:
 - Platform (Windows/Linux)
 - Security warnings (e.g., password placeholders)
 - Usage examples with environment variables
+
+**README Updates**: Whenever scripts are modified or new features are added, update README.md to:
+- Reflect new features in the Features bullet points
+- Add any new configuration options
+- Update usage examples if command-line parameters change
+- Add troubleshooting sections for new functionality
