@@ -5,13 +5,15 @@
 #   - Scans all WordPress installations in Plesk vhosts for backup files
 #   - Removes backups older than specified retention period
 #   - Configurable retention via DAYS environment variable (default: 365 days)
+#   - Dry-run mode to preview deletions without removing files
 #   - Safe deletion with proper error handling and validation
 #   - Detailed logging with timestamps
 #   - Exit codes for automation and monitoring
 #   - Self-update capability with automatic or manual updates
-# Usage: ./remove-wordpress-backups.sh [--update|--self-update] or DAYS=180 ./remove-wordpress-backups.sh
+# Usage: ./remove-wordpress-backups.sh [--dry-run] [--update|--self-update] or DAYS=180 ./remove-wordpress-backups.sh
 # Environment Variables:
 #   DAYS - Number of days to keep backups (default: 365)
+#   DRY_RUN - Set to "true" to enable dry-run mode (default: false)
 #   AUTO_UPDATE - Set to "true" to enable automatic updates (default: false)
 #   UPDATE_CHECK_INTERVAL - Hours between update checks (default: 24)
 #   GITHUB_BRANCH - GitHub branch to update from (default: main)
@@ -139,12 +141,15 @@ self_update() {
     exec "${SCRIPT_PATH}" "$@"
 }
 
-# Check for manual update flag
+# Check for command-line flags
+DRY_RUN="${DRY_RUN:-false}"
 for arg in "$@"; do
     if [ "${arg}" = "--update" ] || [ "${arg}" = "--self-update" ]; then
         log_update "Manual update requested..."
         self_update "$@"
         exit $?
+    elif [ "${arg}" = "--dry-run" ] || [ "${arg}" = "-n" ]; then
+        DRY_RUN="true"
     fi
 done
 
@@ -204,6 +209,9 @@ remove_wordpress_backups() {
     log_message "============================================================================"
     log_message "WordPress Backup Cleanup - Starting"
     log_message "============================================================================"
+    if [ "${DRY_RUN}" = "true" ]; then
+        log_message "MODE: DRY-RUN (no files will be deleted)"
+    fi
     log_message "Retention period: ${DAYS} days"
     log_message "Search path: ${BACKUP_PATH}"
     echo ""
@@ -228,6 +236,20 @@ remove_wordpress_backups() {
     fi
     
     log_message "Found ${file_count} backup file(s) to delete."
+    
+    # In dry-run mode, list files that would be deleted
+    if [ "${DRY_RUN}" = "true" ]; then
+        echo ""
+        log_message "Files that would be deleted (dry-run mode):"
+        log_message "------------------------------------------------------------"
+        ${FIND_CMD} ${BACKUP_PATH} -type f -mtime +"${DAYS}" -exec ls -lh {} \; 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done
+        echo ""
+        log_message "Dry-run complete. ${file_count} file(s) would be deleted."
+        log_message "Run without --dry-run flag to actually delete these files."
+        return 0
+    fi
     
     # Remove old backup files
     if ${FIND_CMD} ${BACKUP_PATH} -type f -mtime +"${DAYS}" -exec ${RM_CMD} -f {} + 2>/dev/null; then
