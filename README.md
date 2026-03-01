@@ -1,6 +1,6 @@
 # Plesk Scripts
 
-A collection of utility scripts for automating common Plesk server management tasks, including MySQL database backups and WordPress backup cleanup.
+A collection of utility scripts for automating common Plesk server management tasks, including MySQL database backups, WordPress backup cleanup, and PCI-DSS security header compliance scanning.
 
 ⭐ If you like this project, star it on GitHub — it helps a lot!
 
@@ -13,6 +13,7 @@ This repository provides ready-to-use scripts for Plesk server administrators to
 **Key Features:**
 - MySQL database backup automation for Windows and Linux
 - Automated cleanup of old WordPress backup files
+- PCI-DSS security header compliance scanning for hosted websites
 - Simple configuration with environment variables
 - Compatible with Plesk's built-in tools
 
@@ -54,6 +55,26 @@ Automatically clean up old WordPress backup files to free up disk space.
 
 [Learn more →](./remove-old-wordpress-backups)
 
+### PCI-DSS Security Header Compliance Scanner
+
+Scan a website for the security header issues most commonly flagged by PCI-DSS compliance tools (e.g., PayPal's `paypal.managepci.com` scanner).
+
+**Available versions:**
+- `pci-dss-scan.bat` - Windows batch script
+- `pci-dss-scan.sh` - Linux shell script
+
+**Features:**
+- Detects `X-Powered-By`, `Server`, and other banner-disclosure headers (PCI DSS Req. 2.2 / 6.5)
+- Checks all `Set-Cookie` headers for missing `Secure`, `HttpOnly`, and `SameSite` flags
+- Validates `Cache-Control` headers on sensitive pages (login, checkout, cart, admin) and public pages
+- Checks for additional best-practice headers: `X-Frame-Options`, `Strict-Transport-Security`, `Content-Security-Policy`, etc.
+- Tests multiple paths automatically, including WordPress login, WooCommerce checkout, and custom registration pages
+- Colour-coded `[PASS]` / `[FAIL]` / `[WARN]` output with a final pass/fail summary
+- Exit code equals the number of failures (suitable for CI/CD pipelines)
+- Self-update capability with automatic or manual updates (Linux)
+
+[Learn more →](./pci-dss-scan)
+
 ## Getting Started
 
 ### Prerequisites
@@ -80,6 +101,7 @@ Automatically clean up old WordPress backup files to free up disk space.
    ```bash
    chmod +x mysql-backups/mysql-backup.sh
    chmod +x remove-old-wordpress-backups/remove-wordpress-backups.sh
+   chmod +x pci-dss-scan/pci-dss-scan.sh
    ```
 
 3. Configure the scripts according to your environment (see individual script documentation).
@@ -95,12 +117,14 @@ All Linux scripts include built-in self-update capability to ensure you're alway
 # Update the script to the latest version
 ./mysql-backups/mysql-backup.sh --update
 ./remove-old-wordpress-backups/remove-wordpress-backups.sh --update
+./pci-dss-scan/pci-dss-scan.sh --update
 ```
 
 **Automatic updates (recommended for cron):**
 ```bash
 # Enable auto-update with environment variable
 AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+AUTO_UPDATE=true ./pci-dss-scan/pci-dss-scan.sh https://example.com
 
 # Configure in cron for automatic updates
 0 2 * * * AUTO_UPDATE=true /path/to/plesk-scripts/mysql-backups/mysql-backup.sh
@@ -166,6 +190,32 @@ AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 0 3 * * 0 AUTO_UPDATE=true /path/to/plesk-scripts/remove-old-wordpress-backups/remove-wordpress-backups.sh
 ```
 
+### PCI-DSS Scanner
+
+**Linux:**
+```bash
+# Scan a target domain
+./pci-dss-scan/pci-dss-scan.sh https://example.com
+
+# Scan with auto-update enabled
+AUTO_UPDATE=true ./pci-dss-scan/pci-dss-scan.sh https://example.com
+
+# Add extra paths to test (space-separated)
+EXTRA_PATHS="/members/ /sign-up/" ./pci-dss-scan/pci-dss-scan.sh https://example.com
+```
+
+**Windows:**
+```cmd
+:: Scan a target domain
+pci-dss-scan\pci-dss-scan.bat https://example.com
+```
+
+**Interpreting results:**
+- `[PASS]` — The check passed; no action required.
+- `[FAIL]` — A PCI-DSS required control is missing or misconfigured; must be remediated before re-scanning.
+- `[WARN]` — A best-practice header or flag is absent; review and apply if possible.
+- The script exits with a code equal to the number of `[FAIL]` results (0 = all clear).
+
 ## Configuration
 
 ### MySQL Backup Configuration
@@ -189,6 +239,19 @@ AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 **Command-line Options:**
 - `--dry-run` or `-n` - Preview deletions without removing files
 - `--update` or `--self-update` - Update script to latest version from GitHub
+
+### PCI-DSS Scanner Configuration
+
+**Environment Variables:**
+- `TARGET_URL` - Set the target domain (required if not passed as an argument)
+  - Example: `TARGET_URL=https://example.com ./pci-dss-scan/pci-dss-scan.sh`
+- `EXTRA_PATHS` - Space-separated list of extra URL paths to include in cookie and header checks
+  - Example: `EXTRA_PATHS="/members/ /sign-up/"`
+
+**Command-line Options:**
+- First argument - Target URL (overrides `TARGET_URL` env var)
+  - Example: `./pci-dss-scan/pci-dss-scan.sh https://example.com`
+- `--update` or `--self-update` - Update script to latest version from GitHub (Linux only)
 
 ## Best Practices
 
@@ -242,6 +305,27 @@ plesk db -e "show databases"
 # Ensure script has execute permissions
 chmod +x mysql-backup.sh
 ```
+
+### PCI-DSS Scanner Issues
+
+**Problem:** Site is unreachable
+```bash
+# Verify connectivity manually
+curl -I https://example.com
+```
+
+**Problem:** Cookies not being detected on protected/login pages
+- The scanner tests unauthenticated requests; authenticated session cookies will only appear after login
+- Log in via a browser, capture cookies with browser dev tools, and compare flag settings manually
+- Or use `EXTRA_PATHS` to add any pages that set cookies before authentication
+
+**Problem:** Some paths return 404 and are skipped
+- Confirm the path exists on the target site (e.g., the shop or donate page may be at a different slug)
+- Use `EXTRA_PATHS` to add the correct paths: `EXTRA_PATHS="/give/ /events/" ./pci-dss-scan/pci-dss-scan.sh`
+
+**Problem:** ANSI colours not displaying in Windows CMD
+- Run from Windows Terminal or PowerShell, which support ANSI escape codes
+- Or pipe output to a file: `pci-dss-scan.bat > results.txt`
 
 ### WordPress Backup Cleanup Issues
 
