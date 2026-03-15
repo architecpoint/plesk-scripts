@@ -5,7 +5,10 @@ set -euo pipefail
 # Platform: Linux
 # Features:
 #   - Detects X-Powered-By and Server header disclosure (PCI-DSS banner disclosure)
-#   - Checks all cookies for missing Secure and HttpOnly flags
+#   - Checks all cookies for missing Secure, HttpOnly, and SameSite flags
+#   - Tests WordPress AJAX endpoint (admin-ajax.php) via POST for cookie security
+#   - Detects client-side JavaScript cookie assignments (document.cookie writes)
+#   - Identifies known tracking libraries (Source Buster JS, WPForms) and their cookie flags
 #   - Validates Cache-Control headers for sensitive and non-sensitive pages
 #   - Tests multiple paths (homepage, login, checkout, registration, admin)
 #   - Colour-coded PASS/FAIL/WARN output with a final summary
@@ -161,6 +164,7 @@ DEFAULT_PATHS=(
     "/"
     "/wp-login.php"
     "/wp-admin/"
+    "/wp-admin/admin-ajax.php"
     "/shop/"
     "/cart/"
     "/checkout/"
@@ -229,6 +233,21 @@ fetch_headers_with_cookies() {
         --max-time 15 \
         --connect-timeout 5 \
         -L \
+        -c /dev/null \
+        -A "${BROWSER_UA}" \
+        "${url}" 2>/dev/null || true
+}
+
+# Fetch response headers + body for POST requests (e.g., WordPress AJAX endpoints)
+fetch_post_headers_with_cookies() {
+    local url="$1"
+    local post_data="${2:-action=heartbeat}"
+    curl -si \
+        --max-time 15 \
+        --connect-timeout 5 \
+        -L \
+        -X POST \
+        -d "${post_data}" \
         -c /dev/null \
         -A "${BROWSER_UA}" \
         "${url}" 2>/dev/null || true
@@ -356,6 +375,44 @@ check_cookie_attributes() {
         info "     If the site uses session cookies after login, test authenticated paths manually"
     fi
 
+    # Test WordPress AJAX endpoint via POST — a common source of client-side cookie issues
+    # Evidence: _wpfuuid and sbjs_* cookies observed being set during admin-ajax.php POST requests
+    echo ""
+    info "Testing WordPress AJAX endpoint via POST for cookie attributes..."
+    local ajax_url="${TARGET_URL}/wp-admin/admin-ajax.php"
+    local ajax_response
+    ajax_response=$(fetch_post_headers_with_cookies "${ajax_url}" "action=heartbeat&nonce=&interval=60")
+    local ajax_cookies
+    ajax_cookies=$(echo "${ajax_response}" | grep -i "^set-cookie:" || true)
+
+    if [ -n "${ajax_cookies}" ]; then
+        any_cookie_found=true
+        info "Cookies found on POST to: ${ajax_url}"
+        while IFS= read -r cookie_line; do
+            local cookie_name
+            cookie_name=$(echo "${cookie_line}" | sed 's/^[Ss]et-[Cc]ookie: *//;s/=.*//')
+            local missing_flags=()
+            if ! echo "${cookie_line}" | grep -qi "httponly"; then
+                missing_flags+=("HttpOnly")
+            fi
+            if ! echo "${cookie_line}" | grep -qi "; *secure"; then
+                missing_flags+=("Secure")
+            fi
+            if ! echo "${cookie_line}" | grep -qi "samesite"; then
+                missing_flags+=("SameSite")
+            fi
+            if [ ${#missing_flags[@]} -eq 0 ]; then
+                pass "Cookie '${cookie_name}' (admin-ajax POST) has Secure, HttpOnly, and SameSite flags"
+            else
+                fail "Cookie '${cookie_name}' (admin-ajax POST) is missing: ${missing_flags[*]}"
+                info "     Full cookie: ${cookie_line}"
+                cookie_issues=$((cookie_issues + 1))
+            fi
+        done <<< "${ajax_cookies}"
+    else
+        info "No Set-Cookie headers on POST to admin-ajax.php (may require authentication)"
+    fi
+
     if [ "${cookie_issues}" -gt 0 ]; then
         echo ""
         info "Fix (WordPress/.htaccess): Add to wp-config.php:"
@@ -367,6 +424,9 @@ check_cookie_attributes() {
         echo ""
         info "Fix (Apache .htaccess - requires mod_headers):"
         info "     Header always edit Set-Cookie (.*) \"\$1; Secure; HttpOnly; SameSite=Strict\""
+        echo ""
+        info "Note: Client-side (JavaScript-set) cookies cannot have HttpOnly by design."
+        info "      See CHECK 5 below for client-side cookie detection and remediation guidance."
     fi
 }
 
@@ -382,6 +442,7 @@ check_caching_headers() {
     local sensitive_paths=(
         "/wp-login.php"
         "/wp-admin/"
+        "/wp-admin/admin-ajax.php"
         "/checkout/"
         "/cart/"
         "/my-account/"
@@ -504,6 +565,157 @@ check_additional_headers() {
 }
 
 ###############################################################################
+# CHECK 5: CLIENT-SIDE JAVASCRIPT COOKIE DETECTION
+###############################################################################
+
+check_client_side_cookies() {
+    section "CHECK 5: Client-side JavaScript Cookie Detection"
+    echo ""
+    info "Scanning page source and referenced JavaScript files for client-side cookie assignments..."
+    info "(JS-set cookies cannot have HttpOnly by design — they must have at minimum the Secure flag)"
+    echo ""
+
+    local any_finding=false
+    # Track reported libraries to avoid duplicate messages across multiple pages
+    local sbjs_reported=false
+    local wpforms_reported=false
+
+    for path in "${ALL_PATHS[@]}"; do
+        local url="${TARGET_URL}${path}"
+        local body
+        body=$(curl -sL --max-time 15 --connect-timeout 5 -A "${BROWSER_UA}" "${url}" 2>/dev/null || true)
+
+        [ -z "${body}" ] && continue
+        # Skip very short responses (likely 404/redirect pages with no meaningful content)
+        [ "${#body}" -lt 500 ] && continue
+
+        # --- Inline document.cookie detection ---
+        local js_writes
+        js_writes=$(echo "${body}" | grep -oiE 'document\.cookie\s*=[^;<]{5,150}' | head -20 || true)
+        if [ -n "${js_writes}" ]; then
+            any_finding=true
+            info "Inline JavaScript cookie assignments found on ${path}:"
+            while IFS= read -r assignment; do
+                local snippet="${assignment:0:120}"
+                if echo "${assignment}" | grep -qi "secure"; then
+                    pass "  JS cookie includes Secure flag: ${snippet}"
+                else
+                    fail "  JS cookie missing Secure flag: ${snippet}"
+                    info "     Fix: append '; Secure' to the document.cookie assignment"
+                fi
+            done <<< "${js_writes}"
+        fi
+
+        # Extract all external script src URLs referenced from the page
+        local script_srcs
+        script_srcs=$(echo "${body}" | grep -oiE "src=['\"][^'\"]*\\.js[^'\"]*['\"]" | \
+            grep -oiE "['\"][^'\"]+['\"]" | tr -d "'\"" || true)
+
+        # Helper: resolve relative/protocol-relative URL to absolute
+        resolve_url() {
+            local u="$1"
+            [[ "${u}" == //* ]] && u="https:${u}"
+            [[ "${u}" == /* ]]  && u="${TARGET_URL}${u}"
+            echo "${u}"
+        }
+
+        # --- Source Buster JS / sbjs_* detection ---
+        # Detects via: inline HTML reference OR <script src> containing sbjs/sourcebuster
+        if [ "${sbjs_reported}" = false ]; then
+            local sbjs_js_url=""
+            sbjs_js_url=$(echo "${script_srcs}" | grep -iE 'sourcebuster|sbjs' | head -1 || true)
+            local sbjs_html_ref=""
+            sbjs_html_ref=$(echo "${body}" | grep -iE 'sourcebuster|sbjs' | head -1 || true)
+
+            if [ -n "${sbjs_js_url}" ] || [ -n "${sbjs_html_ref}" ]; then
+                sbjs_reported=true
+                any_finding=true
+
+                # Fetch the external script to check for Secure configuration
+                local sbjs_content=""
+                if [ -n "${sbjs_js_url}" ]; then
+                    sbjs_js_url=$(resolve_url "${sbjs_js_url}")
+                    sbjs_content=$(curl -sL --max-time 8 --connect-timeout 4 -A "${BROWSER_UA}" \
+                        "${sbjs_js_url}" 2>/dev/null | head -c 100000 || true)
+                fi
+
+                # Check for Secure: true in inline config or fetched script
+                if echo "${body}${sbjs_content}" | grep -qiE \
+                    'Sbjs\.init\s*\(\s*\{[^}]*secure\s*:\s*true|["\x27]secure["\x27]\s*:\s*true'; then
+                    pass "Source Buster JS (sbjs_* cookies) detected — Secure: true is configured (found via ${path})"
+                else
+                    fail "Source Buster JS (sbjs_* cookies) detected — Secure flag not configured (found via ${path})"
+                    info "     Sets cookies: sbjs_udata, sbjs_session, sbjs_current, sbjs_first,"
+                    info "                   sbjs_first_add, sbjs_current_add, sbjs_migrations"
+                    info "     These are JS-set tracking cookies and cannot have HttpOnly"
+                    info "     Fix: Pass { secure: true } in your Sbjs.init() call:"
+                    info "       Sbjs.init({ secure: true });"
+                fi
+            fi
+        fi
+
+        # --- WPForms _wpfuuid detection ---
+        # Priority order:
+        #   1. Runtime check: is Set-Cookie: _wpfuuid actually present in the HTTP response?
+        #      If not, tracking is disabled server-side — no finding.
+        #   2. Is the specific tracking script (wpforms-tracking) loaded?
+        #      The main wpforms.min.js always contains the _wpfuuid code path regardless of the
+        #      tracking setting, so matching any wpforms script is a false positive.
+        #   3. Is _wpfuuid present as an inline literal (e.g. in an inline <script> block)?
+        if [ "${wpforms_reported}" = false ]; then
+            # Check 1: runtime — does an HTTP response actually set _wpfuuid?
+            local wpf_set_cookie=""
+            wpf_set_cookie=$(fetch_headers_with_cookies "${url}" | grep -i "^set-cookie:.*_wpfuuid" || true)
+
+            # Check 2: specific tracking script loaded (not just any wpforms JS)
+            local wpf_tracking_url=""
+            wpf_tracking_url=$(echo "${script_srcs}" | grep -iE 'wpforms-tracking' | head -1 || true)
+
+            # Check 3: inline literal in HTML (e.g. an inline <script> block)
+            local wpf_inline=""
+            wpf_inline=$(echo "${body}" | grep -iE '_wpfuuid' | grep -viE 'src=|/\*|<!--' | head -1 || true)
+
+            if [ -n "${wpf_set_cookie}" ]; then
+                # Cookie is actually being set at runtime — real finding
+                wpforms_reported=true
+                any_finding=true
+                if echo "${wpf_set_cookie}" | grep -qi "; *secure"; then
+                    warn "WPForms _wpfuuid cookie is being set (found via ${path}) — Secure flag present, but HttpOnly is not possible (JS-set)"
+                    info "     This is expected: JS-set cookies cannot have HttpOnly by design"
+                else
+                    fail "WPForms _wpfuuid cookie is being set (found via ${path}) — missing Secure flag; HttpOnly not possible (JS-set)"
+                fi
+                info "     _wpfuuid is a WPForms tracking UUID set via document.cookie"
+                info "     Fix: Disable user tracking: WPForms > Settings > General > Disable user tracking"
+            elif [ -n "${wpf_tracking_url}" ] || [ -n "${wpf_inline}" ]; then
+                # Tracking script or inline reference detected, but cookie not seen in HTTP headers.
+                # Could mean tracking is active but cookie is set asynchronously (AJAX/JS-only).
+                wpforms_reported=true
+                any_finding=true
+                warn "WPForms tracking script/code detected (found via ${path}) but _wpfuuid not seen in Set-Cookie headers"
+                info "     This may mean: (a) tracking is disabled server-side but the tracking script is still loaded,"
+                info "                   (b) the cookie is set asynchronously after page load (check browser DevTools)."
+                info "     If _wpfuuid still appears in DevTools cookies, the tracking setting may not have taken effect."
+                info "     Fix: WPForms > Settings > General > Disable user tracking (then clear cache)"
+            fi
+            # If only the non-tracking wpforms.min.js is present: no finding.
+            # The main WPForms JS always contains _wpfuuid code but only runs it when tracking is enabled.
+        fi
+    done
+
+    if [ "${any_finding}" = false ]; then
+        warn "No client-side JavaScript cookie writes or known tracking libraries detected"
+        info "     If sbjs_* or _wpfuuid cookies appear in browser DevTools, they may be bundled"
+        info "     inside a theme JS file. Review <script src> tags in the page source manually."
+    fi
+
+    echo ""
+    info "REMINDER: Cookies set via document.cookie (JavaScript) cannot have the HttpOnly attribute."
+    info "          Ensure all JS-set cookies include the Secure flag (requires HTTPS)."
+    info "          Consider server-side analytics to reduce client-side cookie exposure."
+}
+
+###############################################################################
 # SUMMARY
 ###############################################################################
 
@@ -558,4 +770,5 @@ check_banner_disclosure
 check_cookie_attributes
 check_caching_headers
 check_additional_headers
+check_client_side_cookies
 print_summary
