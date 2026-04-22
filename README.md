@@ -14,6 +14,7 @@ This repository provides ready-to-use scripts for Plesk server administrators to
 - MySQL database backup automation for Windows and Linux
 - Automated cleanup of old WordPress backup files
 - PCI-DSS security header compliance scanning for hosted websites
+- Essential Plugin supply-chain attack scanner for WordPress sites
 - Simple configuration with environment variables
 - Compatible with Plesk's built-in tools
 
@@ -54,6 +55,23 @@ Automatically clean up old WordPress backup files to free up disk space.
 - Self-update capability for automatic script updates
 
 [Learn more →](./remove-old-wordpress-backups)
+
+### Essential Plugin Supply-Chain Attack Scanner
+
+Scans all WordPress installations on a Plesk server for the Essential Plugin supply-chain attack (April 2026), in which 31 plugins were weaponized after the portfolio was acquired via Flippa and backdoored 8 months before activation.
+
+**Features:**
+- Detects all 31 affected plugin slugs from the Essential Plugin portfolio
+- Checks for the `wpos-analytics/` PHP deserialization backdoor module
+- Scans PHP files for known code signatures (`fetch_ver_info`, `version_info_clean`, etc.)
+- Detects the `wp-comments-posts.php` malware dropper file
+- Flags `wp-config.php` infection via unusual file size and C2 domain references
+- Broad C2 domain scan (`analytics.essentialplugin.com`) across all site PHP files
+- Colour-coded per-site status (`CLEAN` / `BACKDOOR PRESENT` / `ACTIVELY COMPROMISED`)
+- Detailed remediation instructions for each affected site
+- Self-update capability with automatic or manual updates
+
+[Learn more →](./essential-plugin-malware-scan)
 
 ### PCI-DSS Security Header Compliance Scanner
 
@@ -102,6 +120,7 @@ Scan a website for the security header issues most commonly flagged by PCI-DSS c
    chmod +x mysql-backups/mysql-backup.sh
    chmod +x remove-old-wordpress-backups/remove-wordpress-backups.sh
    chmod +x pci-dss-scan/pci-dss-scan.sh
+   chmod +x essential-plugin-malware-scan/essential-plugin-scan.sh
    ```
 
 3. Configure the scripts according to your environment (see individual script documentation).
@@ -118,6 +137,7 @@ All Linux scripts include built-in self-update capability to ensure you're alway
 ./mysql-backups/mysql-backup.sh --update
 ./remove-old-wordpress-backups/remove-wordpress-backups.sh --update
 ./pci-dss-scan/pci-dss-scan.sh --update
+./essential-plugin-malware-scan/essential-plugin-scan.sh --update
 ```
 
 **Automatic updates (recommended for cron):**
@@ -190,6 +210,30 @@ AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 0 3 * * 0 AUTO_UPDATE=true /path/to/plesk-scripts/remove-old-wordpress-backups/remove-wordpress-backups.sh
 ```
 
+### Essential Plugin Malware Scanner
+
+```bash
+# Scan all WordPress sites on the server
+./essential-plugin-malware-scan/essential-plugin-scan.sh
+
+# Scan a custom vhosts directory
+WP_VHOSTS_DIR=/srv/www ./essential-plugin-malware-scan/essential-plugin-scan.sh
+
+# Update the script to the latest version
+./essential-plugin-malware-scan/essential-plugin-scan.sh --update
+
+# Run with auto-update enabled (recommended for one-off use)
+AUTO_UPDATE=true ./essential-plugin-malware-scan/essential-plugin-scan.sh
+```
+
+**Interpreting results:**
+- `[OK]` — No affected plugins or indicators found on this site.
+- `[WARN]` — An affected plugin slug is present but the backdoor module appears already removed.
+- `[DANGER]` — A specific IOC (backdoor module, dropper file, C2 reference) was found.
+- `STATUS: CLEAN` — No indicators detected.
+- `STATUS: BACKDOOR PRESENT` — The `wpos-analytics/` module exists; activation may not have occurred yet.
+- `STATUS: ACTIVELY COMPROMISED` — Evidence of a successful payload delivery (oversized `wp-config.php`, C2 references, dropper file).
+
 ### PCI-DSS Scanner
 
 **Linux:**
@@ -238,6 +282,15 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
 
 **Command-line Options:**
 - `--dry-run` or `-n` - Preview deletions without removing files
+- `--update` or `--self-update` - Update script to latest version from GitHub
+
+### Essential Plugin Scanner Configuration
+
+**Environment Variables:**
+- `WP_VHOSTS_DIR` - Root directory to scan for WordPress installations (default: `/var/www/vhosts`)
+  - Example: `WP_VHOSTS_DIR=/srv/www ./essential-plugin-malware-scan/essential-plugin-scan.sh`
+
+**Command-line Options:**
 - `--update` or `--self-update` - Update script to latest version from GitHub
 
 ### PCI-DSS Scanner Configuration
@@ -305,6 +358,27 @@ plesk db -e "show databases"
 # Ensure script has execute permissions
 chmod +x mysql-backup.sh
 ```
+
+### Essential Plugin Scanner Issues
+
+**Problem:** No WordPress installations found
+```bash
+# Verify the vhosts directory path
+ls /var/www/vhosts
+
+# Override the search path if your Plesk uses a different location
+WP_VHOSTS_DIR=/srv/www ./essential-plugin-malware-scan/essential-plugin-scan.sh
+```
+
+**Problem:** wp-config.php flagged as large but site looks fine
+- Legitimate sites with many constants defined can exceed 8 KB — check the file manually
+- The key indicator is the `essentialplugin.com` domain or `wpos_analytics_anl` appearing on the same line as `require_once ABSPATH . 'wp-settings.php';`
+- If in doubt, compare the file against a clean backup from before April 6, 2026
+
+**Problem:** Plugin shows as affected but was already updated by WordPress.org
+- WordPress.org's forced update to v2.6.9.1 adds `return;` statements to disable phone-home but does **not** remove the `wpos-analytics/` directory
+- The backdoor module is still present and must be removed manually or via a patched zip
+- Check for `wpos-analytics/` in the plugin folder to confirm
 
 ### PCI-DSS Scanner Issues
 
