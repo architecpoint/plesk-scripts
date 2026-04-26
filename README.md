@@ -1,6 +1,6 @@
 # Plesk Scripts
 
-A collection of utility scripts for automating common Plesk server management tasks, including MySQL database backups, WordPress backup cleanup, and PCI-DSS security header compliance scanning.
+A collection of utility scripts for automating common Plesk server management tasks, including MySQL database backups, WordPress backup cleanup, PCI-DSS security header compliance scanning, and domain hosting setting monitoring.
 
 ⭐ If you like this project, star it on GitHub — it helps a lot!
 
@@ -15,6 +15,7 @@ This repository provides ready-to-use scripts for Plesk server administrators to
 - Automated cleanup of old WordPress backup files
 - PCI-DSS security header compliance scanning for hosted websites
 - Essential Plugin supply-chain attack scanner for WordPress sites
+- Domain hosting setting monitoring with email alerts (Windows)
 - Simple configuration with environment variables
 - Compatible with Plesk's built-in tools
 
@@ -72,6 +73,23 @@ Scans all WordPress installations on a Plesk server for the Essential Plugin sup
 - Self-update capability with automatic or manual updates
 
 [Learn more →](./essential-plugin-malware-scan)
+
+### Monitor Domain Hosting Settings
+
+Monitor Plesk hosting settings for a specific domain and receive email alerts when a setting changes. Currently detects Microsoft ASP.NET being disabled.
+
+**Available versions:**
+- `monitor-aspnet.bat` - Windows batch script
+
+**Features:**
+- Reads Microsoft ASP.NET enabled status directly from the Plesk database (`psa.hosting`)
+- SMTP relay configured directly in the script to match your Plesk external SMTP settings
+- Tracks state between runs — only alerts on change, no duplicate notifications
+- Sends an ALERT email when ASP.NET becomes disabled
+- Sends a RESOLVED email when ASP.NET is re-enabled after being disabled
+- Suitable for Plesk Scheduled Tasks (recommended interval: every 15 minutes)
+
+[Learn more →](./monitor-domain-hosting)
 
 ### PCI-DSS Security Header Compliance Scanner
 
@@ -233,6 +251,41 @@ AUTO_UPDATE=true ./essential-plugin-malware-scan/essential-plugin-scan.sh
 - `STATUS: CLEAN` — No indicators detected.
 - `STATUS: BACKDOOR PRESENT` — The `wpos-analytics/` module exists; activation may not have occurred yet.
 - `STATUS: ACTIVELY COMPROMISED` — Evidence of a successful payload delivery (oversized `wp-config.php`, C2 references, dropper file).
+
+- `STATUS: CLEAN` — No indicators detected.
+- `STATUS: BACKDOOR PRESENT` — The `wpos-analytics/` module exists; activation may not have occurred yet.
+- `STATUS: ACTIVELY COMPROMISED` — Evidence of a successful payload delivery (oversized `wp-config.php`, C2 references, dropper file).
+
+### Monitor Domain Hosting Settings
+
+```cmd
+:: Monitor a domain and alert recipient@example.com if ASP.NET is disabled
+monitor-domain-hosting\monitor-aspnet.bat example.com recipient@example.com
+```
+
+**Before first run**, open `monitor-aspnet.bat` and set:
+1. `MYSQL_PASSWORD` — replace `<password_for_mysql>` with your Plesk MySQL admin password
+2. `SMTP_SERVER` — set to your external SMTP relay hostname (matches **Tools & Settings → Mail Server Settings → External SMTP**)
+3. `SMTP_PORT` — typically `25`, `465` (SSL), or `587` (STARTTLS)
+4. `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` — set if your relay requires authentication, leave blank otherwise
+5. `SMTP_SECURE` — set to `ssl` or `starttls` if required, leave blank for plain SMTP
+
+**Plesk Scheduled Tasks setup (every 15 minutes):**
+1. In Plesk go to **Tools & Settings** → **Scheduled Tasks** → **Add Task**
+2. Set **Command** to:
+   ```
+   "C:\Scripts\monitor-aspnet.bat" example.com admin@example.com
+   ```
+   Replace `example.com` and `admin@example.com` with the actual domain and recipient.
+3. Set the **Schedule** to `0,15,30,45 * * * *` (every 15 minutes)
+4. Ensure the task runs as a user with read access to the Plesk MySQL database (the `System` or `Administrator` account is typical)
+5. Click **OK** to save
+
+**How it works:**
+- On each run the script queries Plesk for the current ASP.NET status and compares it to the last known state stored in `%TEMP%\plesk-monitor\`
+- An ALERT email is sent only when ASP.NET transitions from enabled → disabled (no repeated emails while it stays disabled)
+- A RESOLVED email is sent when ASP.NET is re-enabled
+- State is stored per-domain, so multiple domains can be monitored with separate scheduled tasks
 
 ### PCI-DSS Scanner
 
