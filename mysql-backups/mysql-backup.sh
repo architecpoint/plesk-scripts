@@ -189,8 +189,16 @@ log_message() {
 # Function to terminate existing instance
 terminate_existing_instance() {
     local existing_pid="$1"
+
+    # Verify the PID is still alive before attempting to kill it.
+    # Without this check, a recycled PID (reused by an unrelated process after the previous
+    # instance died) could be killed accidentally.
+    if ! kill -0 "${existing_pid}" 2>/dev/null; then
+        log_message "Stale PID file found (PID ${existing_pid} is no longer running). Removing lock."
+        return 0
+    fi
+
     log_message "Another instance is running (PID: ${existing_pid}). Attempting to terminate..."
-    
     if kill -9 "${existing_pid}" 2>/dev/null; then
         log_message "Successfully terminated existing instance"
         sleep 1
@@ -234,8 +242,11 @@ if [ ! -x "${PLESK_BIN}" ]; then
 fi
 
 # Get list of databases, excluding system databases
+# Note: 'mysql' and 'sys' are system schemas on the customer MySQL instance (port 3306).
+# Plesk's own system databases (psa, etc.) are on a separate instance (port 8306) and
+# are never visible here.
 log_message "Retrieving list of databases..."
-if ! "${PLESK_BIN}" db -e "SHOW DATABASES" | grep -v -E "^Database|information_schema|performance_schema|phpmyadmin" > "${DB_LIST}"; then
+if ! "${PLESK_BIN}" db -e "SHOW DATABASES" | grep -v -E "^Database|information_schema|performance_schema|phpmyadmin|^mysql$|^sys$" > "${DB_LIST}"; then
     log_message "ERROR: Cannot connect to MySQL database or retrieve database list"
     exit 1
 fi
@@ -287,8 +298,10 @@ while IFS= read -r database; do
     # Remove old backup file if it exists
     /bin/rm -f "${FOLDER}/${database}.sql"
     
-    # Dump database using Plesk's built-in tool
-    if "${PLESK_BIN}" db dump "${database}" > "${FOLDER}/${database}.sql" 2>&1; then
+    # Dump database using Plesk's built-in tool.
+    # stderr is intentionally NOT redirected to the .sql file — any MySQL warnings or
+    # errors will appear in the terminal/cron log, keeping the SQL file clean.
+    if "${PLESK_BIN}" db dump "${database}" > "${FOLDER}/${database}.sql"; then
         log_message "    Successfully backed up: ${database}"
         SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
     else
