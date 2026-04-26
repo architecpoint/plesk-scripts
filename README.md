@@ -249,10 +249,7 @@ AUTO_UPDATE=true ./essential-plugin-malware-scan/essential-plugin-scan.sh
 - `[WARN]` — An affected plugin slug is present but the backdoor module appears already removed.
 - `[DANGER]` — A specific IOC (backdoor module, dropper file, C2 reference) was found.
 - `STATUS: CLEAN` — No indicators detected.
-- `STATUS: BACKDOOR PRESENT` — The `wpos-analytics/` module exists; activation may not have occurred yet.
-- `STATUS: ACTIVELY COMPROMISED` — Evidence of a successful payload delivery (oversized `wp-config.php`, C2 references, dropper file).
-
-- `STATUS: CLEAN` — No indicators detected.
+- `STATUS: AFFECTED PLUGIN DETECTED` — Affected plugin slug(s) found but the `wpos-analytics/` backdoor module is absent (plugin appears already patched or cleaned).
 - `STATUS: BACKDOOR PRESENT` — The `wpos-analytics/` module exists; activation may not have occurred yet.
 - `STATUS: ACTIVELY COMPROMISED` — Evidence of a successful payload delivery (oversized `wp-config.php`, C2 references, dropper file).
 
