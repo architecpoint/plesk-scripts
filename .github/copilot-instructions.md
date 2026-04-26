@@ -2,17 +2,18 @@
 
 ## Project Overview
 
-This is a collection of standalone automation scripts for Plesk server management across Windows and Linux platforms. Each script/folder is **independent** with platform-specific implementations (`.bat` for Windows, `.sh` for Linux). Scripts are designed for ad-hoc execution or scheduled task automation on Plesk hosting control panel servers.
+This is a collection of standalone automation scripts for Plesk server management across Windows and Linux platforms. Scripts are primarily targeted at **Plesk Obsidian** (the current Plesk release line). Each script/folder is **independent** with platform-specific implementations (`.bat` for Windows, `.sh` for Linux). Scripts are designed for ad-hoc execution or scheduled task automation on Plesk hosting control panel servers.
 
 ## Architecture Principles
 
 - **One-script-per-task**: Each directory contains a self-contained automation tool
-- **Dual platform support**: Scripts come in pairs (`.bat` and `.sh`) with feature parity
+- **Dual platform support**: Most scripts come in pairs (`.bat` and `.sh`) with feature parity; some are single-platform where the task is OS-specific (e.g., `monitor-aspnet.bat` is Windows-only; `essential-plugin-scan.sh` targets Linux Plesk only)
 - **No build system**: Direct shell/batch script execution, no compilation or bundling required
 - **Direct CLI integration**: Windows scripts use `%plesk_dir%` environment variable; Linux scripts use `/usr/sbin/plesk` CLI tool
 - **Safety-first design**: PID locking, validation checks, and error handling to prevent concurrent runs and data loss
 - **Security conscious**: Never hardcode credentials; use placeholders (`<password_for_mysql>`) or environment-based auth (`plesk db`)
 - **Self-updating bash scripts**: All Linux bash scripts include embedded self-update functionality for automatic updates from GitHub
+- **External tool dependency**: Scripts that perform HTTP checks (PCI-DSS scanner) depend on `curl` being available on the system
 
 ## Code Conventions
 
@@ -251,16 +252,44 @@ fi
 - **Validation before deletion**: Check directory existence and file age before removing
 - **Safe deletion**: Use `find ... -mtime +${DAYS} -delete` pattern for atomic operations
 
+### Essential Plugin Malware Scanner
+- **Platform**: Linux only — scans the Plesk vhosts directory on the server
+- **Vhosts root**: Configurable via `WP_VHOSTS_DIR` (default: `/var/www/vhosts`)
+- **Detection targets**: 31 affected plugin slugs, `wpos-analytics/` backdoor module, known PHP code signatures (`fetch_ver_info`, `version_info_clean`), `wp-comments-posts.php` dropper, `wp-config.php` infection indicators, and C2 domain (`analytics.essentialplugin.com`) references
+- **Output**: Colour-coded per-site status (`CLEAN` / `BACKDOOR PRESENT` / `ACTIVELY COMPROMISED`) plus a plain-text report file for emailing clients
+- **Report file**: Configurable via `REPORT_FILE` (default: `/tmp/essential-plugin-scan-<hostname>-<timestamp>.txt`)
+- **No Plesk CLI dependency**: Scans the file system directly; does not require `plesk` credentials
+
+### PCI-DSS Security Header Scanner
+- **Input**: Requires a target URL as the first argument or via `TARGET_URL` environment variable
+- **HTTP checks via curl**: Uses `curl` for all HTTP requests — must be installed on the system
+- **Checks performed**: Server/`X-Powered-By` banner disclosure, cookie flag validation (`Secure`, `HttpOnly`, `SameSite`), `Cache-Control` headers on sensitive paths, and additional best-practice headers (`X-Frame-Options`, `HSTS`, `CSP`, etc.)
+- **Paths tested**: Homepage, login, checkout, cart, registration, admin, plus custom paths via `EXTRA_PATHS`
+- **Exit code**: Equals the number of failures — suitable for CI/CD pipelines
+- **Platform parity**: Windows (`pci-dss-scan.bat`) and Linux (`pci-dss-scan.sh`) versions exist; the Linux version has a broader feature set and self-update support
+
+### Monitor Domain Hosting Settings (ASP.NET)
+- **Platform**: Windows only — reads from Plesk's MySQL database
+- **Authentication**: Uses `%plesk_dir%\MySQL\bin\mysql.exe` with placeholder password `<password_for_mysql>`
+- **State tracking**: Stores last known state in `%TEMP%\plesk-monitor\` — only alerts on transitions, no repeated emails
+- **Alert types**: ALERT email when ASP.NET transitions enabled → disabled; RESOLVED email on re-enable
+- **SMTP**: Configured directly in the script — `SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE` must be set before first run
+- **Scheduling**: Designed for Plesk Scheduled Tasks at 15-minute intervals (`0,15,30,45 * * * *`)
+
 ## Integration Points
 
 ### External Dependencies
-- **Plesk CLI**: Windows uses `%plesk_dir%\admin\bin\mysql.exe`, Linux uses `/usr/sbin/plesk`
+- **Plesk CLI**: Windows uses `%plesk_dir%\admin\bin\mysql.exe` (MySQL backups) and `%plesk_dir%\MySQL\bin\mysql.exe` (monitoring); Linux uses `/usr/sbin/plesk`
 - **MySQL Client**: Direct `mysql` and `mysqldump` commands for database operations
-- **File System**: Backup paths at `/backup/mysql/`, `%plesk_dir%\Databases\`, `/var/www/vhosts/*/wordpress-backups`
+- **curl**: Required by `pci-dss-scan.sh` and `pci-dss-scan.bat` for all HTTP requests; also used by all Linux self-update functions
+- **File System**: Backup paths at `/backup/mysql/`, `%plesk_dir%\Databases\`, `/var/www/vhosts/*/wordpress-backups`; vhosts scanned at `/var/www/vhosts` (configurable)
+- **SMTP relay**: `monitor-aspnet.bat` connects to an external SMTP server; configured inside the script
 
 ### Authentication Patterns
-- **Windows MySQL**: Manual password replacement in script file (placeholder: `<password_for_mysql>`)
+- **Windows MySQL (backups)**: Manual password replacement in script file (placeholder: `<password_for_mysql>`)
+- **Windows MySQL (monitoring)**: Same placeholder pattern — `MYSQL_PASSWORD=<password_for_mysql>` in `monitor-aspnet.bat`
 - **Linux MySQL**: Plesk's `plesk db` command (no credentials needed, uses Plesk admin context)
+- **File system scanning**: `essential-plugin-scan.sh` reads the file system directly — no database credentials required
 - **File permissions**: Linux scripts use `umask 077` to create backups with restrictive permissions (600)
 
 ## Key Files/Directories
@@ -270,19 +299,28 @@ fi
   - `mysql-backup.sh`: Linux implementation with PID locking and Plesk CLI integration
 - **`remove-old-wordpress-backups/`**: WordPress backup retention management
   - `remove-wordpress-backups.sh`: Linux script for cleaning old WordPress backup files
+- **`essential-plugin-malware-scan/`**: WordPress supply-chain attack scanner (Linux only)
+  - `essential-plugin-scan.sh`: Scans all WordPress sites for the April 2026 Essential Plugin backdoor
+- **`pci-dss-scan/`**: PCI-DSS security header compliance scanner
+  - `pci-dss-scan.bat`: Windows implementation (basic checks, requires `curl.exe`)
+  - `pci-dss-scan.sh`: Linux implementation (extended checks, self-update support)
+- **`monitor-domain-hosting/`**: Domain hosting setting monitoring (Windows only)
+  - `monitor-aspnet.bat`: Monitors ASP.NET enabled status and sends email alerts on change
 - **`README.md`**: User-facing documentation (must be updated when features change)
 
 ## Common Pitfalls
 
 1. **Windows path handling**: Forgetting delayed expansion causes failures with Plesk's default path `C:\Program Files (x86)\Plesk`
-2. **Credential security**: Never commit actual MySQL passwords; always use placeholders or environment-based auth
+2. **Credential security**: Never commit actual MySQL passwords or SMTP passwords; always use placeholders or environment-based auth
 3. **PID file cleanup**: Ensure `trap "rm -f ${PIDFILE}" EXIT` is set to prevent stale locks
-4. **Platform parity**: When adding features, update **both** `.bat` and `.sh` versions
+4. **Platform parity**: When adding features to a paired script, update **both** `.bat` and `.sh` versions; single-platform scripts are exempt
 5. **System database inclusion**: Always filter out `information_schema`, `performance_schema`, `phpmyadmin` in MySQL scripts
 6. **README sync**: Feature additions require README.md updates in the Features section
-7. **WSL environment**: User runs on Windows with `wsl.exe` - ensure Linux scripts are bash-compatible and use LF line endings
+7. **WSL environment**: User runs on Windows with `wsl.exe` — ensure Linux scripts are bash-compatible and use LF line endings
 8. **Self-update paths**: Always update `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` variables when creating new bash scripts
 9. **Self-update feature**: All bash scripts must include the complete self-update pattern immediately after `set -euo pipefail`
+10. **curl dependency**: `pci-dss-scan.sh` and the self-update mechanism in all Linux scripts require `curl` (or `wget` as fallback) — document this in script headers and README prerequisites
+11. **SMTP configuration**: `monitor-aspnet.bat` requires SMTP settings to be hardcoded before first run — always document all five SMTP variables (`SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`) in the script header
 
 ## Testing & Validation
 
