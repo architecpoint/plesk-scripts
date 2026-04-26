@@ -331,7 +331,7 @@ echo.
     -A "Mozilla/5.0 (PCI-DSS Compliance Scanner)" ^
     "!TARGET_URL!/" > "!HDR_FILE!" 2>nul
 
-set BONUS_HEADERS=X-Frame-Options X-Content-Type-Options Strict-Transport-Security Content-Security-Policy Referrer-Policy
+set BONUS_HEADERS=X-Frame-Options X-Content-Type-Options Strict-Transport-Security Content-Security-Policy Referrer-Policy Permissions-Policy
 
 for %%H in (!BONUS_HEADERS!) do (
     findstr /i "^%%H:" "!HDR_FILE!" >nul 2>&1

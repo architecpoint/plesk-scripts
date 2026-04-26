@@ -15,6 +15,9 @@
 #   UPDATE_CHECK_INTERVAL - Hours between update checks (default: 24)
 #   GITHUB_BRANCH - GitHub branch to update from (default: main)
 # Security: Uses Plesk's built-in 'plesk db' command for authenticated database access
+# NOTE: This script backs up CUSTOMER databases (the standard MySQL instance).
+#       Plesk's own internal databases (psa, etc.) run on a separate instance (port 8306)
+#       and are intentionally excluded from this backup.
 
 set -euo pipefail
 

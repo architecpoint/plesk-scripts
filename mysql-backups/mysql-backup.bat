@@ -13,6 +13,10 @@ REM Usage: mysql-backup.bat
 REM Environment Variables:
 REM   plesk_dir - Plesk installation directory (required, auto-set by Plesk)
 REM Security: Replace <password_for_mysql> with actual MySQL admin password before running
+REM
+REM NOTE: This script backs up CUSTOMER databases on the standard MySQL instance (port 3306).
+REM       Plesk's own internal databases (psa, etc.) are on a separate instance (port 8306)
+REM       and are intentionally excluded from this backup.
 REM ============================================================================
 
 setlocal enabledelayedexpansion
@@ -30,6 +34,8 @@ set "BACKUP_DIR=!PLESK_DIR!\Databases\MySQL\backup"
 set "DB_LIST=!BACKUP_DIR!\db_list.txt"
 set "MYSQL_BIN=!PLESK_DIR!\MySQL\bin\mysql.exe"
 set "MYSQLDUMP_BIN=!PLESK_DIR!\MySQL\bin\mysqldump.exe"
+REM NOTE: Port 3306 is the customer-facing MySQL instance (where hosted databases live).
+REM       Plesk's own system database (psa, etc.) runs on port 8306 and is NOT backed up here.
 set "MYSQL_USER=admin"
 set "MYSQL_PASSWORD=<password_for_mysql>"
 set "MYSQL_PORT=3306"
