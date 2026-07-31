@@ -1,0 +1,20 @@
+name: Feature Request
+description: Suggest a new script or an improvement to an existing one
+labels: ["enhancement"]
+body:
+  - type: textarea
+    attributes:
+      label: What Plesk task should this automate?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed approach
+      description: New script, or a change to an existing one? Which platform(s) — Windows, Linux, or both?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+    validations:
+      required: false
