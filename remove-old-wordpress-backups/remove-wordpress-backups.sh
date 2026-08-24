@@ -333,9 +333,10 @@ send_via_smtp() {
     return "${rc}"
 }
 
-# Function to email the report when EMAIL_TO is configured. Prefers the local
-# 'mail' command; falls back to a direct SMTP relay via curl when no local
-# MTA is present but SMTP_SERVER is configured.
+# Function to email the report when EMAIL_TO is configured. If SMTP_SERVER is
+# explicitly set, it takes priority (sends directly via curl) so an explicit
+# relay config always wins over a possibly-misconfigured local MTA. Falls
+# back to the local 'mail' command otherwise.
 send_email_report() {
     local body="$1"
 
@@ -343,21 +344,21 @@ send_email_report() {
 
     local subject="${EMAIL_SUBJECT:-WordPress Backup Cleanup Report - $(hostname -s 2>/dev/null || hostname)}"
 
-    if command -v mail >/dev/null 2>&1; then
-        if echo "${body}" | mail -s "${subject}" "${EMAIL_TO}"; then
-            log_message "Report emailed to ${EMAIL_TO}"
-            return 0
-        fi
-        log_message "WARNING: 'mail' command failed to send report to ${EMAIL_TO}"
-        return 1
-    fi
-
     if [ -n "${SMTP_SERVER}" ]; then
         if send_via_smtp "${subject}" "${body}"; then
             log_message "Report emailed to ${EMAIL_TO} via SMTP (${SMTP_SERVER}:${SMTP_PORT})"
             return 0
         fi
         log_message "WARNING: Failed to send email report to ${EMAIL_TO} via SMTP (${SMTP_SERVER}:${SMTP_PORT})"
+        return 1
+    fi
+
+    if command -v mail >/dev/null 2>&1; then
+        if echo "${body}" | mail -s "${subject}" "${EMAIL_TO}"; then
+            log_message "Report emailed to ${EMAIL_TO}"
+            return 0
+        fi
+        log_message "WARNING: 'mail' command failed to send report to ${EMAIL_TO}"
         return 1
     fi
 
