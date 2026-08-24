@@ -48,6 +48,8 @@ Automatically clean up old WordPress backup files to free up disk space.
 **Features:**
 - Scans all WordPress installations in Plesk vhosts
 - Removes backups older than a specified number of days (default: 365 days)
+- Always keeps a minimum number of most recent backups per domain (default: 3)
+- Optional email report of backups found/removed per domain
 - Dry-run mode to preview deletions without removing files
 - Configurable retention period via environment variables
 - Safe deletion with proper error handling
@@ -221,6 +223,17 @@ DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 # Preview custom retention period before deleting
 DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
 
+# Always keep at least 5 most recent backups per domain, even if older than DAYS
+MIN_KEEP=5 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
+
+# Email a per-domain report of backups found/removed (requires the 'mail' command)
+EMAIL_TO="admin@example.com" ./remove-old-wordpress-backups/remove-wordpress-backups.sh
+
+# Email the report via an SMTP relay when no local MTA is available (uses curl)
+EMAIL_TO="admin@example.com" SMTP_SERVER="mail.example.com" SMTP_PORT=587 SMTP_SECURE=starttls \
+  SMTP_AUTH_USER="relay-user" SMTP_AUTH_PASS="relay-pass" \
+  ./remove-old-wordpress-backups/remove-wordpress-backups.sh
+
 # Run with auto-update enabled
 AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 
@@ -327,8 +340,19 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
 **Environment Variables:**
 - `DAYS` - Number of days to keep backups (default: `365`)
   - Example: `DAYS=180` keeps backups for 6 months
+- `MIN_KEEP` - Minimum number of most recent backups to always keep per domain, regardless of age (default: `3`)
+  - Example: `MIN_KEEP=5` never deletes a domain's 5 newest backups even if older than `DAYS`
 - `DRY_RUN` - Set to `true` to enable dry-run mode (default: `false`)
   - Example: `DRY_RUN=true` previews deletions without removing files
+- `EMAIL_TO` - Email address to receive the per-domain report (default: unset, no email sent)
+  - Uses the local `mail` command if available; falls back to the SMTP relay settings below via `curl` if not
+  - Report includes, per domain: backups found, backups removed (or would-remove in dry-run), and filenames removed
+- `EMAIL_SUBJECT` - Subject line for the email report (default: `WordPress Backup Cleanup Report - <hostname>`)
+- `SMTP_SERVER` - SMTP relay hostname, used only if the local `mail` command is unavailable (default: unset)
+- `SMTP_PORT` - SMTP relay port (default: `25`)
+- `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` - SMTP credentials, leave unset for an unauthenticated relay (default: unset)
+- `SMTP_SECURE` - SMTP security: blank for plain, `ssl` for implicit TLS (typically port 465), `starttls` for explicit STARTTLS (typically port 587) (default: blank)
+- `SMTP_FROM` - Sender address (default: `plesk-monitor@<hostname>`)
 
 **Command-line Options:**
 - `--dry-run` or `-n` - Preview deletions without removing files
