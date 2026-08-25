@@ -346,7 +346,7 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
   - Example: `DRY_RUN=true` previews deletions without removing files
 - `EMAIL_TO` - Email address to receive the per-domain report (default: unset, no email sent)
   - Sent as an HTML email. If `SMTP_SERVER` is set, sends directly via `curl` (bypassing the local `mail` command entirely); otherwise falls back to the local `mail` command
-  - Report includes a summary, backups removed (or would-remove in dry-run) per domain with filenames, and a backups-found table per domain
+  - Report includes a summary, backups removed (or would-remove in dry-run) per domain with filenames and dates, and a backups-found table per domain with newest/oldest backup dates
 - `EMAIL_SUBJECT` - Subject line for the email report (default: `WordPress Backup Cleanup Report - <hostname>`)
 - `SMTP_SERVER` - SMTP relay hostname; when set, takes priority over the local `mail` command (default: unset)
 - `SMTP_PORT` - SMTP relay port (default: `25`)
