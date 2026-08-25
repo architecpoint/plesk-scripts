@@ -240,22 +240,25 @@ validate_configuration() {
 # Per-domain scan results, populated by scan_domains(). Parallel arrays indexed by domain.
 DOMAIN_NAMES=()
 DOMAIN_FOUND=()
-DOMAIN_REMOVED_FILES=()  # newline-separated basenames of files removed (or eligible, in dry-run) for that domain
+DOMAIN_NEWEST_DATE=()    # date (YYYY-MM-DD) of the newest backup found, or "-" if none
+DOMAIN_OLDEST_DATE=()    # date (YYYY-MM-DD) of the oldest backup found, or "-" if none
+DOMAIN_REMOVED_FILES=()  # newline-separated "filename (date)" entries for files removed/eligible for that domain
 TO_DELETE=()             # full paths of every file eligible for deletion, across all domains
 
 # Function to scan every domain's backup directory: records how many backups
-# exist, and which ones are eligible for deletion (older than DAYS, beyond the
-# MIN_KEEP newest).
+# exist (with newest/oldest dates), and which ones are eligible for deletion
+# (older than DAYS, beyond the MIN_KEEP newest).
 scan_domains() {
     local dir domain total i removed_list
     for dir in ${BACKUP_PATH}; do
         [ -d "${dir}" ] || continue
         domain=$(basename "$(dirname "${dir}")")
 
-        # Newest-first list of backup files in this domain's directory
-        local files=()
+        # Newest-first list of backup files (with mtime dates) in this domain's directory
+        local files=() dates=()
         while IFS= read -r line; do
             files+=("${line#* }")
+            dates+=("$(date -d "@${line%% *}" '+%Y-%m-%d' 2>/dev/null)")
         done < <(${FIND_CMD} "${dir}" -maxdepth 1 -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn)
 
         total=${#files[@]}
@@ -266,13 +269,20 @@ scan_domains() {
             for ((i = MIN_KEEP; i < total; i++)); do
                 if [ -n "$(${FIND_CMD} "${files[$i]}" -mtime +"${DAYS}" 2>/dev/null)" ]; then
                     TO_DELETE+=("${files[$i]}")
-                    removed_list+="$(basename "${files[$i]}")"$'\n'
+                    removed_list+="$(basename "${files[$i]}") (${dates[$i]})"$'\n'
                 fi
             done
         fi
 
         DOMAIN_NAMES+=("${domain}")
         DOMAIN_FOUND+=("${total}")
+        if [ "${total}" -eq 0 ]; then
+            DOMAIN_NEWEST_DATE+=("-")
+            DOMAIN_OLDEST_DATE+=("-")
+        else
+            DOMAIN_NEWEST_DATE+=("${dates[0]}")
+            DOMAIN_OLDEST_DATE+=("${dates[$((total - 1))]}")
+        fi
         DOMAIN_REMOVED_FILES+=("${removed_list}")
     done
 }
@@ -287,13 +297,15 @@ build_report() {
         action_title="Would remove (dry-run)"
     fi
 
-    local i domain found removed_files removed_count
+    local i domain found newest oldest removed_files removed_count
     local total_found=0 total_removed=0
     local -a removed_section=() counts_section=()
 
     for i in "${!DOMAIN_NAMES[@]}"; do
         domain="${DOMAIN_NAMES[$i]}"
         found="${DOMAIN_FOUND[$i]}"
+        newest="${DOMAIN_NEWEST_DATE[$i]}"
+        oldest="${DOMAIN_OLDEST_DATE[$i]}"
         removed_files="${DOMAIN_REMOVED_FILES[$i]}"
         removed_count=0
         [ -n "${removed_files}" ] && removed_count=$(printf '%s' "${removed_files}" | grep -c .)
@@ -301,7 +313,7 @@ build_report() {
         total_found=$((total_found + found))
         total_removed=$((total_removed + removed_count))
 
-        counts_section+=("$(printf '  %-45s %d' "${domain}" "${found}")")
+        counts_section+=("$(printf '  %-45s %-4s newest: %-12s oldest: %-12s' "${domain}" "${found}" "${newest}" "${oldest}")")
 
         if [ "${removed_count}" -gt 0 ]; then
             removed_section+=("${domain} - ${action_title}: ${removed_count}")
@@ -340,13 +352,15 @@ build_html_report() {
         action_title="Would remove (dry-run)"
     fi
 
-    local i domain found removed_files removed_count row_bg
+    local i domain found newest oldest removed_files removed_count row_bg
     local total_found=0 total_removed=0
     local removed_html="" counts_html=""
 
     for i in "${!DOMAIN_NAMES[@]}"; do
         domain=$(printf '%s' "${DOMAIN_NAMES[$i]}" | html_escape)
         found="${DOMAIN_FOUND[$i]}"
+        newest="${DOMAIN_NEWEST_DATE[$i]}"
+        oldest="${DOMAIN_OLDEST_DATE[$i]}"
         removed_files="${DOMAIN_REMOVED_FILES[$i]}"
         removed_count=0
         [ -n "${removed_files}" ] && removed_count=$(printf '%s' "${removed_files}" | grep -c .)
@@ -356,7 +370,7 @@ build_html_report() {
 
         row_bg="#ffffff"
         [ $(( i % 2 )) -eq 1 ] && row_bg="#f7f7f7"
-        counts_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${found}</td></tr>"
+        counts_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${found}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${newest}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${oldest}</td></tr>"
 
         if [ "${removed_count}" -gt 0 ]; then
             local files_html=""
@@ -389,6 +403,8 @@ build_html_report() {
     <tr style="background:#eee;">
       <th style="text-align:left;padding:6px 12px;border-bottom:2px solid #ccc;">Domain</th>
       <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Backups Found</th>
+      <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Newest Backup</th>
+      <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Oldest Backup</th>
     </tr>
     ${counts_html}
   </table>
