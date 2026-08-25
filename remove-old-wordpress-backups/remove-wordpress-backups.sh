@@ -6,7 +6,7 @@
 #   - Removes backups older than specified retention period
 #   - Configurable retention via DAYS environment variable (default: 365 days)
 #   - Keeps a minimum number of most recent backups per domain regardless of age
-#   - Optional email report summarizing backups found/removed per domain
+#   - Optional HTML email report summarizing backups found/removed per domain
 #   - Dry-run mode to preview deletions without removing files
 #   - Safe deletion with proper error handling and validation
 #   - Detailed logging with timestamps
@@ -326,6 +326,77 @@ build_report() {
     printf '%s\n' "${counts_section[@]}"
 }
 
+# Escapes text for safe inclusion in HTML
+html_escape() {
+    sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
+}
+
+# Function to build an HTML version of the report for a nicer-looking email.
+# Console/dry-run output still uses the plain-text build_report() above.
+build_html_report() {
+    local action="removed" action_title="Removed"
+    if [ "${DRY_RUN}" = "true" ]; then
+        action="would be removed"
+        action_title="Would remove (dry-run)"
+    fi
+
+    local i domain found removed_files removed_count row_bg
+    local total_found=0 total_removed=0
+    local removed_html="" counts_html=""
+
+    for i in "${!DOMAIN_NAMES[@]}"; do
+        domain=$(printf '%s' "${DOMAIN_NAMES[$i]}" | html_escape)
+        found="${DOMAIN_FOUND[$i]}"
+        removed_files="${DOMAIN_REMOVED_FILES[$i]}"
+        removed_count=0
+        [ -n "${removed_files}" ] && removed_count=$(printf '%s' "${removed_files}" | grep -c .)
+
+        total_found=$((total_found + found))
+        total_removed=$((total_removed + removed_count))
+
+        row_bg="#ffffff"
+        [ $(( i % 2 )) -eq 1 ] && row_bg="#f7f7f7"
+        counts_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${found}</td></tr>"
+
+        if [ "${removed_count}" -gt 0 ]; then
+            local files_html=""
+            while IFS= read -r f; do
+                [ -n "${f}" ] && files_html+="<li>$(printf '%s' "${f}" | html_escape)</li>"
+            done <<<"${removed_files}"
+            removed_html+="<li><strong>${domain}</strong> - ${action_title}: ${removed_count}<ul style=\"margin:4px 0;\">${files_html}</ul></li>"
+        fi
+    done
+
+    [ -n "${removed_html}" ] || removed_html="<li style=\"color:#666;\">(none)</li>"
+
+    cat <<EOF
+<html>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #222;">
+  <h2 style="margin-bottom:4px;">WordPress Backup Cleanup Report</h2>
+  <p style="margin-top:0;color:#555;">$(hostname -f 2>/dev/null || hostname) &mdash; $(date '+%Y-%m-%d %H:%M:%S')</p>
+
+  <table style="border-collapse:collapse;margin-bottom:20px;">
+    <tr><td style="padding:4px 12px 4px 0;color:#555;">Domains scanned</td><td style="padding:4px 0;font-weight:bold;">${#DOMAIN_NAMES[@]}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#555;">Backups found</td><td style="padding:4px 0;font-weight:bold;">${total_found}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#555;">Backups ${action}</td><td style="padding:4px 0;font-weight:bold;">${total_removed}</td></tr>
+  </table>
+
+  <h3 style="margin-bottom:6px;">Backups ${action} by domain</h3>
+  <ul style="margin-top:0;padding-left:20px;">${removed_html}</ul>
+
+  <h3 style="margin-bottom:6px;">Backups found by domain</h3>
+  <table style="border-collapse:collapse;width:100%;max-width:600px;">
+    <tr style="background:#eee;">
+      <th style="text-align:left;padding:6px 12px;border-bottom:2px solid #ccc;">Domain</th>
+      <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Backups Found</th>
+    </tr>
+    ${counts_html}
+  </table>
+</body>
+</html>
+EOF
+}
+
 # Function to send the report via an SMTP relay using curl, for servers with no local MTA.
 # SMTP_SECURE: blank for plain, "ssl" for implicit TLS (typically port 465), "starttls" for
 # explicit STARTTLS (typically port 587) — same convention as monitor-aspnet.bat.
@@ -341,6 +412,8 @@ send_via_smtp() {
         echo "From: ${from}"
         echo "To: ${EMAIL_TO}"
         echo "Subject: ${subject}"
+        echo "MIME-Version: 1.0"
+        echo "Content-Type: text/html; charset=UTF-8"
         echo "Date: $(date -R)"
         echo ""
         echo "${body}"
@@ -359,10 +432,12 @@ send_via_smtp() {
     return "${rc}"
 }
 
-# Function to email the report when EMAIL_TO is configured. If SMTP_SERVER is
-# explicitly set, it takes priority (sends directly via curl) so an explicit
-# relay config always wins over a possibly-misconfigured local MTA. Falls
-# back to the local 'mail' command otherwise.
+# Function to email the report when EMAIL_TO is configured. Sends the HTML
+# report built by build_html_report(). If SMTP_SERVER is explicitly set, it
+# takes priority (sends directly via curl) so an explicit relay config always
+# wins over a possibly-misconfigured local MTA. Falls back to the local
+# 'mail' command otherwise (using -a for the HTML content-type header, as
+# supported by mailx/s-nail/bsd-mailx).
 send_email_report() {
     local body="$1"
 
@@ -380,7 +455,7 @@ send_email_report() {
     fi
 
     if command -v mail >/dev/null 2>&1; then
-        if echo "${body}" | mail -s "${subject}" "${EMAIL_TO}"; then
+        if echo "${body}" | mail -a "Content-Type: text/html; charset=UTF-8" -s "${subject}" "${EMAIL_TO}"; then
             log_message "Report emailed to ${EMAIL_TO}"
             return 0
         fi
@@ -418,14 +493,15 @@ remove_wordpress_backups() {
     scan_domains
 
     local file_count=${#TO_DELETE[@]}
-    local report
+    local report html_report
     report=$(build_report)
+    html_report=$(build_html_report)
 
     if [ "${file_count}" -eq 0 ]; then
         log_message "No eligible backup files found. Nothing to delete."
         echo ""
         echo "${report}"
-        send_email_report "${report}"
+        send_email_report "${html_report}"
         return 0
     fi
     
@@ -437,19 +513,17 @@ remove_wordpress_backups() {
     if [ "${DRY_RUN}" = "true" ]; then
         log_message "Dry-run complete. ${file_count} file(s) would be deleted."
         log_message "Run without --dry-run flag to actually delete these files."
-        send_email_report "${report}"
+        send_email_report "${html_report}"
         return 0
     fi
     
     # Remove old backup files
     if printf '%s\0' "${TO_DELETE[@]}" | xargs -0 "${RM_CMD}" -f; then
         log_message "Successfully removed ${file_count} old backup file(s)."
-        send_email_report "${report}"
+        send_email_report "${html_report}"
     else
         log_message "ERROR: Failed to remove some backup files. Check permissions."
-        send_email_report "${report}
-
-WARNING: one or more files could not be removed - check server permissions/logs."
+        send_email_report "${html_report}<p style=\"color:#b00;font-weight:bold;\">WARNING: one or more files could not be removed - check server permissions/logs.</p>"
         return 1
     fi
     
