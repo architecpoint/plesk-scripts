@@ -49,7 +49,7 @@ Automatically clean up old WordPress backup files to free up disk space.
 - Scans all WordPress installations in Plesk vhosts
 - Removes backups older than a specified number of days (default: 365 days)
 - Always keeps a minimum number of most recent backups per domain (default: 3)
-- Optional HTML email report of backups found/removed per domain
+- Optional HTML email report of backups found/removed per domain, including newest/oldest backup dates and disk space used
 - Dry-run mode to preview deletions without removing files
 - Configurable retention period via environment variables
 - Safe deletion with proper error handling
@@ -346,7 +346,7 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
   - Example: `DRY_RUN=true` previews deletions without removing files
 - `EMAIL_TO` - Email address to receive the per-domain report (default: unset, no email sent)
   - Sent as an HTML email. If `SMTP_SERVER` is set, sends directly via `curl` (bypassing the local `mail` command entirely); otherwise falls back to the local `mail` command
-  - Report includes a summary, backups removed (or would-remove in dry-run) per domain with filenames and dates, and a backups-found table per domain with newest/oldest backup dates
+  - Report includes a summary (with total disk space), backups removed (or would-remove in dry-run) per domain with filenames, dates and sizes, and a backups-found table per domain with newest/oldest backup dates and disk space used
 - `EMAIL_SUBJECT` - Subject line for the email report (default: `WordPress Backup Cleanup Report - <hostname>`)
 - `SMTP_SERVER` - SMTP relay hostname; when set, takes priority over the local `mail` command (default: unset)
 - `SMTP_PORT` - SMTP relay port (default: `25`)
