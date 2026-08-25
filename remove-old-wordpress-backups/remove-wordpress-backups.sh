@@ -6,7 +6,8 @@
 #   - Removes backups older than specified retention period
 #   - Configurable retention via DAYS environment variable (default: 365 days)
 #   - Keeps a minimum number of most recent backups per domain regardless of age
-#   - Optional HTML email report summarizing backups found/removed per domain
+#   - Optional HTML email report summarizing backups found/removed per domain,
+#     including newest/oldest backup dates and disk space used, per domain
 #   - Dry-run mode to preview deletions without removing files
 #   - Safe deletion with proper error handling and validation
 #   - Detailed logging with timestamps
@@ -242,40 +243,60 @@ DOMAIN_NAMES=()
 DOMAIN_FOUND=()
 DOMAIN_NEWEST_DATE=()    # date (YYYY-MM-DD) of the newest backup found, or "-" if none
 DOMAIN_OLDEST_DATE=()    # date (YYYY-MM-DD) of the oldest backup found, or "-" if none
+DOMAIN_SIZE_HUMAN=()     # total disk space used by that domain's backups, human-readable (e.g. "1.2GiB")
+DOMAIN_SIZE_BYTES=()     # same, in raw bytes (used to compute the overall total)
 DOMAIN_REMOVED_FILES=()  # newline-separated "filename (date)" entries for files removed/eligible for that domain
 TO_DELETE=()             # full paths of every file eligible for deletion, across all domains
 
+# Converts a byte count to a human-readable size (e.g. "1.2GiB"), falling back
+# to a plain byte count if numfmt is unavailable.
+human_size() {
+    local bytes="$1"
+    if command -v numfmt >/dev/null 2>&1; then
+        numfmt --to=iec-i --suffix=B --format='%.1f' "${bytes}"
+    else
+        echo "${bytes}B"
+    fi
+}
+
 # Function to scan every domain's backup directory: records how many backups
-# exist (with newest/oldest dates), and which ones are eligible for deletion
-# (older than DAYS, beyond the MIN_KEEP newest).
+# exist (with newest/oldest dates and total disk usage), and which ones are
+# eligible for deletion (older than DAYS, beyond the MIN_KEEP newest).
 scan_domains() {
-    local dir domain total i removed_list
+    local dir domain total i removed_list total_bytes
     for dir in ${BACKUP_PATH}; do
         [ -d "${dir}" ] || continue
         domain=$(basename "$(dirname "${dir}")")
 
-        # Newest-first list of backup files (with mtime dates) in this domain's directory
-        local files=() dates=()
+        # Newest-first list of backup files (with mtime dates and sizes) in this domain's directory
+        local files=() dates=() sizes=()
         while IFS= read -r line; do
-            files+=("${line#* }")
+            files+=("${line#* * }")
             dates+=("$(date -d "@${line%% *}" '+%Y-%m-%d' 2>/dev/null)")
-        done < <(${FIND_CMD} "${dir}" -maxdepth 1 -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn)
+            sizes+=("$(echo "${line}" | cut -d' ' -f2)")
+        done < <(${FIND_CMD} "${dir}" -maxdepth 1 -type f -printf '%T@ %s %p\n' 2>/dev/null | sort -rn)
 
         total=${#files[@]}
         removed_list=""
+        total_bytes=0
+        for ((i = 0; i < total; i++)); do
+            total_bytes=$((total_bytes + sizes[i]))
+        done
 
         # Anything beyond the MIN_KEEP newest is eligible if it's also older than DAYS
         if [ "${total}" -gt "${MIN_KEEP}" ]; then
             for ((i = MIN_KEEP; i < total; i++)); do
                 if [ -n "$(${FIND_CMD} "${files[$i]}" -mtime +"${DAYS}" 2>/dev/null)" ]; then
                     TO_DELETE+=("${files[$i]}")
-                    removed_list+="$(basename "${files[$i]}") (${dates[$i]})"$'\n'
+                    removed_list+="$(basename "${files[$i]}") (${dates[$i]}, $(human_size "${sizes[$i]}"))"$'\n'
                 fi
             done
         fi
 
         DOMAIN_NAMES+=("${domain}")
         DOMAIN_FOUND+=("${total}")
+        DOMAIN_SIZE_HUMAN+=("$(human_size "${total_bytes}")")
+        DOMAIN_SIZE_BYTES+=("${total_bytes}")
         if [ "${total}" -eq 0 ]; then
             DOMAIN_NEWEST_DATE+=("-")
             DOMAIN_OLDEST_DATE+=("-")
@@ -297,8 +318,8 @@ build_report() {
         action_title="Would remove (dry-run)"
     fi
 
-    local i domain found newest oldest removed_files removed_count
-    local total_found=0 total_removed=0
+    local i domain found newest oldest size removed_files removed_count
+    local total_found=0 total_removed=0 total_bytes=0
     local -a removed_section=() counts_section=()
 
     for i in "${!DOMAIN_NAMES[@]}"; do
@@ -306,14 +327,16 @@ build_report() {
         found="${DOMAIN_FOUND[$i]}"
         newest="${DOMAIN_NEWEST_DATE[$i]}"
         oldest="${DOMAIN_OLDEST_DATE[$i]}"
+        size="${DOMAIN_SIZE_HUMAN[$i]}"
         removed_files="${DOMAIN_REMOVED_FILES[$i]}"
         removed_count=0
         [ -n "${removed_files}" ] && removed_count=$(printf '%s' "${removed_files}" | grep -c .)
 
         total_found=$((total_found + found))
         total_removed=$((total_removed + removed_count))
+        total_bytes=$((total_bytes + DOMAIN_SIZE_BYTES[i]))
 
-        counts_section+=("$(printf '  %-45s %-4s newest: %-12s oldest: %-12s' "${domain}" "${found}" "${newest}" "${oldest}")")
+        counts_section+=("$(printf '  %-45s %-4s newest: %-12s oldest: %-12s size: %s' "${domain}" "${found}" "${newest}" "${oldest}" "${size}")")
 
         if [ "${removed_count}" -gt 0 ]; then
             removed_section+=("${domain} - ${action_title}: ${removed_count}")
@@ -323,7 +346,7 @@ build_report() {
         fi
     done
 
-    echo "Summary: ${#DOMAIN_NAMES[@]} domain(s) scanned, ${total_found} backup(s) found, ${total_removed} ${action}"
+    echo "Summary: ${#DOMAIN_NAMES[@]} domain(s) scanned, ${total_found} backup(s) found ($(human_size "${total_bytes}")), ${total_removed} ${action}"
     echo ""
 
     echo "Backups ${action} by domain:"
@@ -352,8 +375,8 @@ build_html_report() {
         action_title="Would remove (dry-run)"
     fi
 
-    local i domain found newest oldest removed_files removed_count row_bg
-    local total_found=0 total_removed=0
+    local i domain found newest oldest size removed_files removed_count row_bg
+    local total_found=0 total_removed=0 total_bytes=0
     local removed_html="" counts_html=""
 
     for i in "${!DOMAIN_NAMES[@]}"; do
@@ -361,16 +384,18 @@ build_html_report() {
         found="${DOMAIN_FOUND[$i]}"
         newest="${DOMAIN_NEWEST_DATE[$i]}"
         oldest="${DOMAIN_OLDEST_DATE[$i]}"
+        size="${DOMAIN_SIZE_HUMAN[$i]}"
         removed_files="${DOMAIN_REMOVED_FILES[$i]}"
         removed_count=0
         [ -n "${removed_files}" ] && removed_count=$(printf '%s' "${removed_files}" | grep -c .)
 
         total_found=$((total_found + found))
         total_removed=$((total_removed + removed_count))
+        total_bytes=$((total_bytes + DOMAIN_SIZE_BYTES[i]))
 
         row_bg="#ffffff"
         [ $(( i % 2 )) -eq 1 ] && row_bg="#f7f7f7"
-        counts_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${found}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${newest}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${oldest}</td></tr>"
+        counts_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${found}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${size}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${newest}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${oldest}</td></tr>"
 
         if [ "${removed_count}" -gt 0 ]; then
             local files_html=""
@@ -391,7 +416,7 @@ build_html_report() {
 
   <table style="border-collapse:collapse;margin-bottom:20px;">
     <tr><td style="padding:4px 12px 4px 0;color:#555;">Domains scanned</td><td style="padding:4px 0;font-weight:bold;">${#DOMAIN_NAMES[@]}</td></tr>
-    <tr><td style="padding:4px 12px 4px 0;color:#555;">Backups found</td><td style="padding:4px 0;font-weight:bold;">${total_found}</td></tr>
+    <tr><td style="padding:4px 12px 4px 0;color:#555;">Backups found</td><td style="padding:4px 0;font-weight:bold;">${total_found} ($(human_size "${total_bytes}"))</td></tr>
     <tr><td style="padding:4px 12px 4px 0;color:#555;">Backups ${action}</td><td style="padding:4px 0;font-weight:bold;">${total_removed}</td></tr>
   </table>
 
@@ -399,10 +424,11 @@ build_html_report() {
   <ul style="margin-top:0;padding-left:20px;">${removed_html}</ul>
 
   <h3 style="margin-bottom:6px;">Backups found by domain</h3>
-  <table style="border-collapse:collapse;width:100%;max-width:600px;">
+  <table style="border-collapse:collapse;width:100%;max-width:650px;">
     <tr style="background:#eee;">
       <th style="text-align:left;padding:6px 12px;border-bottom:2px solid #ccc;">Domain</th>
       <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Backups Found</th>
+      <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Disk Space</th>
       <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Newest Backup</th>
       <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Oldest Backup</th>
     </tr>
