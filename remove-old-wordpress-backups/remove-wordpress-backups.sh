@@ -277,12 +277,20 @@ scan_domains() {
     done
 }
 
-# Function to build the plain-text per-domain report used both on-screen and in the email
+# Function to build the plain-text report used both on-screen and in the email:
+# a summary line, a "removed" section (only domains with something removed),
+# and a compact found-backup-count table for every domain.
 build_report() {
-    local action="Removed"
-    [ "${DRY_RUN}" = "true" ] && action="Would remove (dry-run)"
+    local action="removed" action_title="Removed"
+    if [ "${DRY_RUN}" = "true" ]; then
+        action="would be removed"
+        action_title="Would remove (dry-run)"
+    fi
 
     local i domain found removed_files removed_count
+    local total_found=0 total_removed=0
+    local -a removed_section=() counts_section=()
+
     for i in "${!DOMAIN_NAMES[@]}"; do
         domain="${DOMAIN_NAMES[$i]}"
         found="${DOMAIN_FOUND[$i]}"
@@ -290,14 +298,32 @@ build_report() {
         removed_count=0
         [ -n "${removed_files}" ] && removed_count=$(printf '%s' "${removed_files}" | grep -c .)
 
-        echo "Domain: ${domain}"
-        echo "  Backups found: ${found}"
-        echo "  ${action}: ${removed_count}"
+        total_found=$((total_found + found))
+        total_removed=$((total_removed + removed_count))
+
+        counts_section+=("$(printf '  %-45s %d' "${domain}" "${found}")")
+
         if [ "${removed_count}" -gt 0 ]; then
-            printf '%s' "${removed_files}" | sed '/^$/d;s/^/    - /'
+            removed_section+=("${domain} - ${action_title}: ${removed_count}")
+            while IFS= read -r f; do
+                [ -n "${f}" ] && removed_section+=("    - ${f}")
+            done <<<"${removed_files}"
         fi
-        echo ""
     done
+
+    echo "Summary: ${#DOMAIN_NAMES[@]} domain(s) scanned, ${total_found} backup(s) found, ${total_removed} ${action}"
+    echo ""
+
+    echo "Backups ${action} by domain:"
+    if [ "${#removed_section[@]}" -eq 0 ]; then
+        echo "  (none)"
+    else
+        printf '%s\n' "${removed_section[@]}"
+    fi
+    echo ""
+
+    echo "Backups found by domain:"
+    printf '%s\n' "${counts_section[@]}"
 }
 
 # Function to send the report via an SMTP relay using curl, for servers with no local MTA.
