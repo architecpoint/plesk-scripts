@@ -49,7 +49,7 @@ Automatically clean up old WordPress backup files to free up disk space.
 - Scans all WordPress installations in Plesk vhosts
 - Removes backups older than a specified number of days (default: 365 days)
 - Always keeps a minimum number of most recent backups per domain (default: 3)
-- Optional email report of backups found/removed per domain
+- Optional HTML email report of backups found/removed per domain
 - Dry-run mode to preview deletions without removing files
 - Configurable retention period via environment variables
 - Safe deletion with proper error handling
@@ -345,10 +345,10 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
 - `DRY_RUN` - Set to `true` to enable dry-run mode (default: `false`)
   - Example: `DRY_RUN=true` previews deletions without removing files
 - `EMAIL_TO` - Email address to receive the per-domain report (default: unset, no email sent)
-  - If `SMTP_SERVER` is set, sends directly via `curl` (bypassing the local `mail` command entirely); otherwise falls back to the local `mail` command
-  - Report includes, per domain: backups found, backups removed (or would-remove in dry-run), and filenames removed
+  - Sent as an HTML email. If `SMTP_SERVER` is set, sends directly via `curl` (bypassing the local `mail` command entirely); otherwise falls back to the local `mail` command
+  - Report includes a summary, backups removed (or would-remove in dry-run) per domain with filenames, and a backups-found table per domain
 - `EMAIL_SUBJECT` - Subject line for the email report (default: `WordPress Backup Cleanup Report - <hostname>`)
-- `SMTP_SERVER` - SMTP relay hostname, used only if the local `mail` command is unavailable (default: unset)
+- `SMTP_SERVER` - SMTP relay hostname; when set, takes priority over the local `mail` command (default: unset)
 - `SMTP_PORT` - SMTP relay port (default: `25`)
 - `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` - SMTP credentials, leave unset for an unauthenticated relay (default: unset)
 - `SMTP_SECURE` - SMTP security: blank for plain, `ssl` for implicit TLS (typically port 465), `starttls` for explicit STARTTLS (typically port 587) (default: blank)
