@@ -400,15 +400,23 @@ build_html_report() {
         counts_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${found}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${size}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${newest}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${oldest}</td></tr>"
 
         if [ "${removed_count}" -gt 0 ]; then
-            local files_html=""
+            row_bg="#ffffff"
+            [ $(( i % 2 )) -eq 1 ] && row_bg="#fff3f3"
+            local f fname fdate fsize
             while IFS= read -r f; do
-                [ -n "${f}" ] && files_html+="<li>$(printf '%s' "${f}" | html_escape)</li>"
+                [ -n "${f}" ] || continue
+                # Split "filename (date, size)" back into its parts for the table columns
+                if [[ "${f}" =~ ^(.*)\ \(([^,]+),\ (.+)\)$ ]]; then
+                    fname="${BASH_REMATCH[1]}"
+                    fdate="${BASH_REMATCH[2]}"
+                    fsize="${BASH_REMATCH[3]}"
+                else
+                    fname="${f}"; fdate="-"; fsize="-"
+                fi
+                removed_html+="<tr style=\"background:${row_bg};\"><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">${domain}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;\">$(printf '%s' "${fname}" | html_escape)</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${fdate}</td><td style=\"padding:6px 12px;border-bottom:1px solid #eee;text-align:right;\">${fsize}</td></tr>"
             done <<<"${removed_files}"
-            removed_html+="<li><strong>${domain}</strong> - ${action_title}: ${removed_count}<ul style=\"margin:4px 0;\">${files_html}</ul></li>"
         fi
     done
-
-    [ -n "${removed_html}" ] || removed_html="<li style=\"color:#666;\">(none)</li>"
 
     cat <<EOF
 <html>
@@ -423,8 +431,24 @@ build_html_report() {
   </table>
 
   <h3 style="margin-bottom:6px;">Backups ${action} by domain</h3>
-  <ul style="margin-top:0;padding-left:20px;">${removed_html}</ul>
+EOF
+    if [ -n "${removed_html}" ]; then
+        cat <<EOF
+  <table style="border-collapse:collapse;width:100%;max-width:650px;margin-bottom:20px;">
+    <tr style="background:#eee;">
+      <th style="text-align:left;padding:6px 12px;border-bottom:2px solid #ccc;">Domain</th>
+      <th style="text-align:left;padding:6px 12px;border-bottom:2px solid #ccc;">File</th>
+      <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Date</th>
+      <th style="text-align:right;padding:6px 12px;border-bottom:2px solid #ccc;">Size</th>
+    </tr>
+    ${removed_html}
+  </table>
+EOF
+    else
+        echo '  <p style="color:#666;margin-bottom:20px;">(none)</p>'
+    fi
 
+    cat <<EOF
   <h3 style="margin-bottom:6px;">Backups found by domain</h3>
   <table style="border-collapse:collapse;width:100%;max-width:650px;">
     <tr style="background:#eee;">
