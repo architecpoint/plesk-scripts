@@ -19,6 +19,7 @@
 #   MIN_KEEP - Minimum number of most recent backups to keep per domain (default: 3)
 #   DRY_RUN - Set to "true" to enable dry-run mode (default: false)
 #   EMAIL_TO - Email address to send the per-domain report to (default: unset, no email sent)
+#   EMAIL_ONLY_ON_DELETIONS - Set to "true" to only email when backups were actually deleted (default: false)
 #   EMAIL_SUBJECT - Subject line for the email report (default: "WordPress Backup Cleanup Report - <hostname>")
 #   SMTP_SERVER - SMTP relay host, used via curl if local 'mail' command is unavailable (default: unset)
 #   SMTP_PORT - SMTP relay port (default: 25)
@@ -187,6 +188,7 @@ FIND_CMD="/bin/find"
 RM_CMD="/bin/rm"
 EMAIL_TO="${EMAIL_TO:-}"
 EMAIL_SUBJECT="${EMAIL_SUBJECT:-}"
+EMAIL_ONLY_ON_DELETIONS="${EMAIL_ONLY_ON_DELETIONS:-false}"
 # SMTP fallback for servers without a local MTA (used only if 'mail' command is unavailable)
 SMTP_SERVER="${SMTP_SERVER:-}"
 SMTP_PORT="${SMTP_PORT:-25}"
@@ -543,7 +545,9 @@ remove_wordpress_backups() {
         log_message "No eligible backup files found. Nothing to delete."
         echo ""
         echo "${report}"
-        send_email_report "${html_report}"
+        if [ "${EMAIL_ONLY_ON_DELETIONS}" != "true" ]; then
+            send_email_report "${html_report}"
+        fi
         return 0
     fi
     

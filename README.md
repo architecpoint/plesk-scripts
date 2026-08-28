@@ -348,6 +348,7 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
   - Sent as an HTML email. If `SMTP_SERVER` is set, sends directly via `curl` (bypassing the local `mail` command entirely); otherwise falls back to the local `mail` command
   - Report includes a summary (with total disk space), backups removed (or would-remove in dry-run) per domain with filenames, dates and sizes, and a backups-found table per domain with newest/oldest backup dates and disk space used
 - `EMAIL_SUBJECT` - Subject line for the email report (default: `WordPress Backup Cleanup Report - <hostname>`)
+- `EMAIL_ONLY_ON_DELETIONS` - Set to `true` to only send the email when at least one backup was actually deleted, skipping the report on runs where nothing was eligible (default: `false`)
 - `SMTP_SERVER` - SMTP relay hostname; when set, takes priority over the local `mail` command (default: unset)
 - `SMTP_PORT` - SMTP relay port (default: `25`)
 - `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` - SMTP credentials, leave unset for an unauthenticated relay (default: unset)
