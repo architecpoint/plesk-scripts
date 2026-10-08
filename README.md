@@ -16,6 +16,7 @@ This repository provides ready-to-use scripts for Plesk server administrators to
 - PCI-DSS security header compliance scanning for hosted websites
 - Essential Plugin supply-chain attack scanner for WordPress sites
 - Domain hosting setting monitoring with email alerts (Windows)
+- Sustained CPU load monitoring with per-subscription attribution and fail2ban-aware alerts (Linux)
 - Simple configuration with environment variables
 - Compatible with Plesk's built-in tools
 
@@ -112,6 +113,25 @@ Scan a website for the security header issues most commonly flagged by PCI-DSS c
 - Self-update capability with automatic or manual updates (Linux)
 
 [Learn more →](./pci-dss-scan)
+
+### Monitor Sustained CPU Load
+
+Detect sustained high CPU load on an AlmaLinux Plesk server, find which subscriptions cause it, and email an alert. Attacks that fail2ban is already banning don't trigger an alert.
+
+**Available versions:**
+- `monitor-cpu-load.sh` - Linux shell script (root required)
+
+**Features:**
+- Alerts on sustained load only: by default, at least 80% of 5-minute samples above 1.0 × CPU cores across a 30-minute window
+- Attributes CPU to Plesk subscriptions through the system user that owns each process
+- Analyzes the access logs of the busiest subscriptions for offenders: IPs in any fail2ban jail (except `ssh`/`sshd`) plus IPs with a bot-scan pattern (high request rate, many 401/403/404, probe paths)
+- Suppresses the alert when banned offenders are at least 80% of the attack traffic; sends a lower-urgency `[NOTICE]` if load is still high a full window later
+- Labels the likely cause: attack-like traffic, web application, database or other process
+- `[ALERT]`, `[REMINDER]` and `[RESOLVED]` HTML emails with an alert cooldown, plus an incident log at `/var/log/plesk-cpu-monitor.log`
+- Read-only: never bans IPs or changes server settings
+- PID locking and self-update capability
+
+[Learn more →](./monitor-cpu-load)
 
 ## Getting Started
 
@@ -323,6 +343,23 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
 - `[WARN]` — A best-practice header or flag is absent; review and apply if possible.
 - The script exits with a code equal to the number of `[FAIL]` results (0 = all clear).
 
+### Monitor Sustained CPU Load
+
+Run as root every 5 minutes, from root's crontab or a Plesk Scheduled Task. It needs about 30 minutes to collect samples before it can alert.
+
+```bash
+# Schedule with cron (every 5 minutes, alerts to an address)
+*/5 * * * * EMAIL_TO=ops@example.com SMTP_SERVER=smtp.example.com /root/monitor-cpu-load.sh >/dev/null 2>&1
+
+# See the current analysis without alerting
+./monitor-cpu-load/monitor-cpu-load.sh --report > /tmp/cpu-report.html
+```
+
+**Reading the results:**
+- `[ALERT]` - Sustained load that fail2ban is not handling; the email lists CPU per subscription, busiest offenders (with the jails holding them) and the likely cause
+- `[NOTICE]` - fail2ban is banning the attack but load stayed high for another full window
+- `[REMINDER]` / `[RESOLVED]` - Incident still ongoing every `REMINDER_HOURS`, and back to normal
+
 ## Configuration
 
 ### MySQL Backup Configuration
@@ -381,7 +418,24 @@ pci-dss-scan\pci-dss-scan.bat https://example.com
   - Example: `./pci-dss-scan/pci-dss-scan.sh https://example.com`
 - `--update` or `--self-update` - Update script to latest version from GitHub (Linux only)
 
-## Best Practices
+### CPU Load Monitor Configuration
+
+**Environment Variables:**
+- `EMAIL_TO` - Address that receives alerts (default: unset, log only)
+- `LOAD_THRESHOLD_FACTOR` - Load threshold as a multiple of CPU cores (default: `1.0`)
+- `WINDOW_MINUTES` / `SAMPLE_INTERVAL_MINUTES` / `SUSTAINED_PERCENT` - Sustained-load rule and cron interval (default: `30` / `5` / `80`)
+- `HANDLED_PERCENT` - Share of attack traffic from banned IPs at which fail2ban counts as handling it (default: `80`)
+- `ATTACK_SHARE_PERCENT` - Share of requests from offenders that makes the load attack-like (default: `50`)
+- `ANALYSIS_MINUTES`, `MAX_LOG_LINES`, `TOP_SUBSCRIPTIONS` - Access log analysis scope (default: `30`, `500000`, `3`)
+- `OFFENDER_RPM`, `OFFENDER_BAD_MIN`, `OFFENDER_PROBE_MIN`, `PROBE_PATTERN` - Offender heuristics for IPs fail2ban hasn't banned
+- `F2B_EXCLUDE_JAILS` - fail2ban jails ignored when collecting banned IPs (default: `ssh sshd`)
+- `ALERT_COOLDOWN_MINUTES`, `REMINDER_HOURS` - Alert pacing (default: `60`, `6`)
+- `LOG_ROOT`, `STATE_DIR`, `LOG_FILE` - Plesk log root, state directory, incident log (default: `/var/www/vhosts/system`, `/var/lib/plesk-cpu-monitor`, `/var/log/plesk-cpu-monitor.log`)
+- `SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`, `SMTP_FROM` - SMTP relay, same as the WordPress backup cleanup (falls back to the local `mail` command)
+
+**Command-line Options:**
+- `--report` - Print the current analysis as HTML; no email, no state change
+- `--update` or `--self-update` - Update script to latest version from GitHub
 
 1. **Test scripts first** - Always test scripts in a non-production environment before deploying
 2. **Use dry-run mode** - Preview deletions with `--dry-run` flag before running cleanup scripts
@@ -492,6 +546,25 @@ DRY_RUN=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
 - Verify file permissions for the script user
 - Ensure correct `DAYS` value is set
 - Run with `--dry-run` flag to see what would be deleted
+
+### CPU Load Monitor Issues
+
+**Problem:** No alert although the server feels slow
+- Only sustained load alerts: at least `SUSTAINED_PERCENT` (80%) of samples over `WINDOW_MINUTES` (30) must exceed `LOAD_THRESHOLD_FACTOR` × cores
+- The first alert can only come after one full window of samples; check `/var/log/plesk-cpu-monitor.log` for `Collecting samples`
+- A `Sustained load is attack-like ... no alert` log line means fail2ban is already banning at least `HANDLED_PERCENT` of the attack traffic
+
+**Problem:** See what the script sees right now
+```bash
+# Prints the analysis as HTML without sending email or changing state
+./monitor-cpu-load/monitor-cpu-load.sh --report > /tmp/cpu-report.html
+```
+
+**Problem:** Email warns that fail2ban could not be checked
+- Confirm `fail2ban-client status` works as root; the script then treats nothing as banned and alerts normally
+
+**Problem:** CPU is not attributed to a subscription
+- Confirm `plesk db -Ne "SELECT 1"` works as root; processes run by users without a Plesk subscription are listed as system users
 
 ## Security Considerations
 
