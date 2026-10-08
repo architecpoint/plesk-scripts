@@ -306,6 +306,8 @@ fi
   - `pci-dss-scan.sh`: Linux implementation (extended checks, self-update support)
 - **`monitor-domain-hosting/`**: Domain hosting setting monitoring (Windows only)
   - `monitor-aspnet.bat`: Monitors ASP.NET enabled status and sends email alerts on change
+- **`monitor-cpu-load/`**: Sustained CPU load monitor (AlmaLinux Plesk only)
+  - `monitor-cpu-load.sh`: Samples load every 5 min (cron), alerts by email on 30-minute sustained load with per-subscription attribution; stays quiet when fail2ban (all jails except SSH) is already banning the attack
 - **`README.md`**: User-facing documentation (must be updated when features change)
 
 ## Maintenance Matrix
@@ -317,6 +319,7 @@ When you change... | ...also update
 `pci-dss-scan/pci-dss-scan.sh` | `pci-dss-scan/pci-dss-scan.bat` (platform parity, basic-checks subset only), `README.md` PCI-DSS section
 `essential-plugin-malware-scan/essential-plugin-scan.sh` | `README.md` Essential Plugin Scanner section (Linux-only, no `.bat` counterpart)
 `monitor-domain-hosting/monitor-aspnet.bat` | `README.md` Domain Hosting Monitor section (Windows-only, no `.sh` counterpart)
+`monitor-cpu-load/monitor-cpu-load.sh` | `README.md` CPU Load Monitor sections, `GLOSSARY.md` if domain terms change (Linux-only, no `.bat` counterpart)
 Any bash script's self-update block | `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` constants inside that same script only — self-update blocks are copy-pasted per script, not shared
 Any script's env vars / CLI flags | That script's header comment block and its `README.md` section
 

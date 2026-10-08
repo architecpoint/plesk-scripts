@@ -10,6 +10,8 @@ This project does not follow semantic versioning (it is a script collection, not
 ### Added
 
 - `AGENTS.md`, maintenance matrix, CI workflow, issue/PR templates, and this changelog (AI-ready repo setup).
+- `monitor-cpu-load/monitor-cpu-load.sh`: sustained CPU load monitor for AlmaLinux Plesk servers with per-subscription attribution, attack detection, fail2ban-aware alert suppression, and email alerts.
+- `GLOSSARY.md` with the domain terms for the CPU load monitor.
 
 ## 2026-04-26
 
