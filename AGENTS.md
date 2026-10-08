@@ -70,6 +70,20 @@ No CI currently existed prior to this change — see `.github/workflows/ci.yml` 
 
 No `docs/` site — `README.md` plus `.github/copilot-instructions.md` are the complete documentation for this repo; a dedicated docs site is not needed for a script collection of this size.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `architecpoint/plesk-scripts` (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
 ## Common Pitfalls
 
 - Forgetting delayed expansion (`!VAR!`) in batch scripts breaks on Plesk's default path with parentheses.
