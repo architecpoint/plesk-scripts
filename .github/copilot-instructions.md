@@ -151,24 +151,6 @@ fi
 - **File system scanning**: `essential-plugin-scan.sh` reads the file system directly — no database credentials required
 - **File permissions**: Linux scripts use `umask 077` to create backups with restrictive permissions (600)
 
-## Key Files/Directories
-
-- **`mysql-backups/`**: Database backup automation for Windows and Linux
-  - `mysql-backup.bat`: Windows implementation with manual password configuration
-  - `mysql-backup.sh`: Linux implementation with PID locking and Plesk CLI integration
-- **`remove-old-wordpress-backups/`**: WordPress backup retention management
-  - `remove-wordpress-backups.sh`: Linux script for cleaning old WordPress backup files
-- **`essential-plugin-malware-scan/`**: WordPress supply-chain attack scanner (Linux only)
-  - `essential-plugin-scan.sh`: Scans all WordPress sites for the April 2026 Essential Plugin backdoor
-- **`pci-dss-scan/`**: PCI-DSS security header compliance scanner
-  - `pci-dss-scan.bat`: Windows implementation (basic checks, requires `curl.exe`)
-  - `pci-dss-scan.sh`: Linux implementation (extended checks, self-update support)
-- **`monitor-domain-hosting/`**: Domain hosting setting monitoring (Windows only)
-  - `monitor-aspnet.bat`: Monitors ASP.NET enabled status and sends email alerts on change
-- **`monitor-cpu-load/`**: Sustained CPU load monitor (AlmaLinux Plesk only)
-  - `monitor-cpu-load.sh`: Samples load every 5 min (cron), alerts by email on 30-minute sustained load with per-subscription attribution; stays quiet when fail2ban (all jails except SSH) is already banning the attack
-- **`README.md`**: User-facing documentation (must be updated when features change)
-
 ## Maintenance Matrix
 
 When you change... | ...also update
@@ -184,17 +166,11 @@ Any script's env vars / CLI flags | That script's header comment block and its `
 
 ## Common Pitfalls
 
-1. **Windows path handling**: Forgetting delayed expansion causes failures with Plesk's default path `C:\Program Files (x86)\Plesk`
-2. **Credential security**: Never commit actual MySQL passwords or SMTP passwords; always use placeholders or environment-based auth
-3. **PID file cleanup**: In scripts that use a PID lock, ensure `trap "rm -f ${PIDFILE}" EXIT` is set to prevent stale locks
-4. **Platform parity**: Only `mysql-backup` and `pci-dss-scan` have `.bat` pairs; update both sides when changing those. Other scripts are Linux-only, and new scripts default to Linux-only
-5. **System database inclusion**: Always filter out `information_schema`, `performance_schema`, `phpmyadmin` in MySQL scripts
-6. **README sync**: Feature additions require README.md updates in the Features section
-7. **WSL environment**: User runs on Windows with `wsl.exe` — ensure Linux scripts are bash-compatible and use LF line endings
-8. **Self-update paths**: Always update `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` variables when creating new bash scripts
-9. **Self-update feature**: All bash scripts must include the complete self-update pattern immediately after `set -euo pipefail`
-10. **curl dependency**: `pci-dss-scan.sh` and the self-update mechanism in all Linux scripts require `curl` (or `wget` as fallback) — document this in script headers and README prerequisites
-11. **SMTP configuration**: `monitor-aspnet.bat` requires SMTP settings to be hardcoded before first run — always document all five SMTP variables (`SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`) in the script header
+Shared pitfalls (delayed expansion, credentials, PID cleanup, platform parity, README sync) live in `AGENTS.md`. Additional ones:
+
+1. **WSL environment**: User runs on Windows with `wsl.exe` — ensure Linux scripts are bash-compatible and use LF line endings
+2. **curl and sha256sum dependency**: the self-update mechanism in all Linux scripts requires `curl` (or `wget` as fallback) and `sha256sum`; `pci-dss-scan.sh` also needs `curl` — document this in script headers and README prerequisites
+3. **SMTP configuration**: `monitor-aspnet.bat` requires SMTP settings to be hardcoded before first run — always document all five SMTP variables (`SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`) in the script header
 
 ## Testing & Validation
 
