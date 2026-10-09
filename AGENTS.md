@@ -55,30 +55,18 @@ No automated test suite for the data-handling scripts. Lint every changed bash s
 - **PID locking**: required when the script can run on a schedule and overlap itself, or writes shared state (`mysql-backup.sh`, `monitor-cpu-load.sh`). Use a PID file + `trap ... EXIT`. Read-only scanners don't need it.
 - **Restrictive permissions (`umask 077`)**: required when the script writes backups, state files or reports that may contain sensitive data.
 - **Security**: never hardcode credentials — Windows scripts use a `<password_for_mysql>` placeholder; Linux scripts use Plesk's `plesk db` command.
-
-| Script | PID lock | `umask 077` |
-| --- | --- | --- |
-| `mysql-backups/mysql-backup.sh` | yes | yes |
-| `monitor-cpu-load/monitor-cpu-load.sh` | yes | yes |
-| `remove-old-wordpress-backups/remove-wordpress-backups.sh` | no | no |
-| `pci-dss-scan/pci-dss-scan.sh` | no | no |
-| `essential-plugin-malware-scan/essential-plugin-scan.sh` | no | no |
-
 - **System DB exclusion**: MySQL scripts always filter `information_schema`, `performance_schema`, `phpmyadmin`.
 
 ## Maintenance Matrix
 
 When you change... | ...also update
 --- | ---
-`mysql-backups/mysql-backup.sh` | `mysql-backups/mysql-backup.bat` (platform parity), `mysql-backups/README.md`
-`remove-old-wordpress-backups/remove-wordpress-backups.sh` | `remove-old-wordpress-backups/README.md` (Linux-only)
-`pci-dss-scan/pci-dss-scan.sh` | `pci-dss-scan/pci-dss-scan.bat` (basic-checks subset only), `pci-dss-scan/README.md`
-`essential-plugin-malware-scan/essential-plugin-scan.sh` | `essential-plugin-malware-scan/README.md` (Linux-only)
-`monitor-domain-hosting/monitor-aspnet.bat` | `monitor-domain-hosting/README.md` (Windows-only)
-`monitor-cpu-load/monitor-cpu-load.sh` | `monitor-cpu-load/README.md`, `GLOSSARY.md` if domain terms change (Linux-only)
+Any script | Its folder `README.md`, including the env var table
+`mysql-backups/mysql-backup.sh` or `pci-dss-scan/pci-dss-scan.sh` | The `.bat` of the pair (platform parity; the Windows version may be a documented subset)
+`monitor-cpu-load/monitor-cpu-load.sh` | `GLOSSARY.md` if domain terms change
 Any bash script's self-update block | `.github/self-update.template.sh` first, then every script's copy; only `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` may differ. CI enforces this
-Any script's env vars / CLI flags | That script's header comment block and the env var table in its folder `README.md`
-A new script | Root `README.md` Scripts table, the table above, and the PID lock / `umask 077` table
+Any script's env vars / CLI flags | That script's header comment block
+A new script | Root `README.md` Scripts table
 
 ## CI and Releases
 
