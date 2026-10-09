@@ -110,6 +110,10 @@ Automatically check if documentation updates are needed when:
 
 ## Documentation Update Rules
 
+### Repository-specific placement
+
+In this repository, per-script usage, configuration and troubleshooting live in the `README.md` inside each script's folder, not in the root `README.md`. When a script changes, update its folder README (including the environment variable table) in the same change. The root `README.md` only needs updating for new scripts, platform changes, or shared install, self-update and security notes. The maintenance matrix in `AGENTS.md` lists what else to update.
+
 ### README.md Updates
 
 **Always update README.md when:**

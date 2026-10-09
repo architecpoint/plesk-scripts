@@ -16,5 +16,5 @@
 
 - [ ] Updated both `.bat` and `.sh` versions for paired scripts (or N/A — single-platform script)
 - [ ] Ran `shellcheck` on any changed bash script
-- [ ] Updated `README.md` Features section if behavior/options changed
+- [ ] Updated the script folder's `README.md` (usage, env var table) if behavior/options changed
 - [ ] No hardcoded credentials — placeholders or environment-based auth only

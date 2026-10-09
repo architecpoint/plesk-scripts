@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`plesk-scripts` is a collection of independent, standalone automation scripts for Plesk server administration (MySQL backups, WordPress backup cleanup, PCI-DSS header scanning, WordPress malware scanning, ASP.NET hosting monitoring). There is no shared runtime, package manager, or build system — every top-level folder is a self-contained tool with platform-specific implementations (`.bat` for Windows, `.sh` for Linux). See `.github/copilot-instructions.md` for the full architecture, per-script feature breakdown, and coding conventions.
+`plesk-scripts` is a collection of independent, standalone automation scripts for Plesk server administration (MySQL backups, WordPress backup cleanup, PCI-DSS header scanning, WordPress malware scanning, ASP.NET hosting monitoring). There is no shared runtime, package manager, or build system — every top-level folder is a self-contained tool with platform-specific implementations (`.bat` for Windows, `.sh` for Linux). Each folder's `README.md` documents that script; `CONTRIBUTING.md` holds the coding conventions, testing, CI and release process; `GLOSSARY.md` defines domain terms.
 
 ## Repository Structure
 
@@ -15,7 +15,10 @@ monitor-domain-hosting/           ASP.NET hosting setting monitor + email alerts
 monitor-cpu-load/                 Sustained CPU load monitor with fail2ban-aware email alerts (AlmaLinux Plesk only)
 .github/instructions/             Path-scoped Copilot instructions (bash, markdown, CentOS/RHEL, GitHub Actions, commenting, docs sync)
 .github/agents/, .github/skills/  Custom Copilot agents and skills
-README.md                         User-facing docs — must stay in sync with script features
+<folder>/README.md                Per-script usage, configuration and troubleshooting — must stay in sync with the script
+README.md                         Index of scripts plus shared install, self-update and security notes
+CONTRIBUTING.md                   Contributor guide: conventions, testing, CI, releases, adding a script
+GLOSSARY.md, docs/adr/            Domain terms and design decisions
 ```
 
 ## Tech Stack
@@ -36,18 +39,13 @@ There is no install/build step. Run a script directly:
 mysql-backups\mysql-backup.bat
 ```
 
-Most Linux scripts support `AUTO_UPDATE=true` and manual `--update`/`--self-update` flags for self-updating from GitHub (see the self-update pattern in `.github/copilot-instructions.md`).
+Most Linux scripts support `AUTO_UPDATE=true` and manual `--update`/`--self-update` flags for self-updating from GitHub (see the self-update block in `CONTRIBUTING.md`).
 
 ## Testing
 
 Write and change files with the edit/create tools; use bash only to run programs.
 
-No automated test suite for the data-handling scripts. Validation is manual:
-
-- Lint every changed bash script: `shellcheck path/to/script.sh`
-- Test in a staging/dev Plesk environment before merging — many scripts assume Plesk CLI/MySQL credentials are present.
-- For Windows scripts, test with paths containing spaces and parentheses (e.g. `C:\Program Files (x86)\Plesk`).
-- See `.github/copilot-instructions.md` → **Testing & Validation** for the full manual checklist (missing credentials, empty DB lists, concurrent runs, permission checks).
+No automated test suite for the data-handling scripts. Lint every changed bash script with `shellcheck path/to/script.sh`, and run the checks in `CONTRIBUTING.md` → **Testing** before opening a PR.
 
 ## Key Patterns and Conventions
 
@@ -68,23 +66,31 @@ No automated test suite for the data-handling scripts. Validation is manual:
 
 - **System DB exclusion**: MySQL scripts always filter `information_schema`, `performance_schema`, `phpmyadmin`.
 
-## CI/CD
+## Maintenance Matrix
 
-`.github/workflows/ci.yml` runs four jobs: shellcheck on all `.sh` files; `.github/scripts/check-self-update.sh`, which verifies every script's self-update block against `.github/self-update.template.sh` (matching core, `SCRIPT_RELATIVE_PATH` equals the file path, unique `UPDATE_CHECK_FILE`); `.github/scripts/test-self-update.sh`, which runs the gated updater against a stubbed `curl` (update, pin, checksum mismatch, no release, bad version); and actionlint on the workflows. Run the first three locally before opening a PR.
+When you change... | ...also update
+--- | ---
+`mysql-backups/mysql-backup.sh` | `mysql-backups/mysql-backup.bat` (platform parity), `mysql-backups/README.md`
+`remove-old-wordpress-backups/remove-wordpress-backups.sh` | `remove-old-wordpress-backups/README.md` (Linux-only)
+`pci-dss-scan/pci-dss-scan.sh` | `pci-dss-scan/pci-dss-scan.bat` (basic-checks subset only), `pci-dss-scan/README.md`
+`essential-plugin-malware-scan/essential-plugin-scan.sh` | `essential-plugin-malware-scan/README.md` (Linux-only)
+`monitor-domain-hosting/monitor-aspnet.bat` | `monitor-domain-hosting/README.md` (Windows-only)
+`monitor-cpu-load/monitor-cpu-load.sh` | `monitor-cpu-load/README.md`, `GLOSSARY.md` if domain terms change (Linux-only)
+Any bash script's self-update block | `.github/self-update.template.sh` first, then every script's copy; only `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` may differ. CI enforces this
+Any script's env vars / CLI flags | That script's header comment block and the env var table in its folder `README.md`
+A new script | Root `README.md` Scripts table, the table above, and the PID lock / `umask 077` table
 
-**Releases:** never tag by hand. `release-pr.yml` opens/updates a "Release vYYYY.MM.DD" PR (renaming `[Unreleased]` in `CHANGELOG.md`) on pushes to `main` that have unreleased entries; merging it triggers `release.yml`, which re-runs shellcheck and the drift check, then creates the tag and release with `SHA256SUMS`. Requires the repo setting *Actions → Allow GitHub Actions to create pull requests*.
+## CI and Releases
+
+CI runs shellcheck, the self-update drift check, the self-update test and actionlint; run the first three locally. Never tag releases by hand — merging the auto-opened "Release vYYYY.MM.DD" PR does it. Details are in `CONTRIBUTING.md` → **CI** and **Releases**.
 
 ## Adding a New Script
 
-1. Create a new top-level folder named after the task.
-2. Add a `.sh` (with the self-update block). Add a `.bat` only if the task needs Windows (see the platform-parity rule above).
-3. Update `README.md`'s Features section and Scripts table.
-4. Update `.github/copilot-instructions.md` if the new script introduces a new convention (env vars, auth pattern, etc.).
-5. Run `shellcheck` on any new bash script.
+Follow `CONTRIBUTING.md` → **Adding a new script**.
 
 ## Documentation
 
-No `docs/` site — `README.md` plus `.github/copilot-instructions.md` are the complete documentation for this repo; a dedicated docs site is not needed for a script collection of this size.
+Docs live in `README.md`, one `README.md` per script folder, `CONTRIBUTING.md`, `GLOSSARY.md` and `docs/adr/` ([ADR 0003](docs/adr/0003-per-script-readmes.md)). There is no docs site; it isn't needed for a collection of this size.
 
 ## Agent skills
 
@@ -106,6 +112,8 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 - Adding a feature to only one side of a `.bat`/`.sh` pair.
 - Committing real MySQL/SMTP passwords instead of placeholders.
 - Forgetting `trap "rm -f ${PIDFILE}" EXIT`, leaving stale PID locks.
-- Skipping the README update after a feature change.
+- Skipping the folder README update after a feature change.
 
-See `.github/copilot-instructions.md` → **Common Pitfalls** for environment-specific ones (WSL line endings, curl/sha256sum, SMTP variables).
+- WSL: the maintainer edits through `wsl.exe`, so keep Linux scripts bash-compatible with LF line endings.
+- The self-update block needs `curl` (or `wget`) and `sha256sum`; document these, and `curl` for `pci-dss-scan.sh`, in script headers and folder README prerequisites.
+- `monitor-aspnet.bat` needs all five SMTP variables set in the script before first run; document them in its header.
