@@ -51,7 +51,7 @@ No automated test suite. Validation is manual:
 
 - **Platform parity**: only scripts that already ship both versions (`mysql-backup`, `pci-dss-scan`) keep their `.bat`/`.sh` pair in step, and the README notes any subset. New scripts are Linux-only by default ([ADR 0002](docs/adr/0002-platform-parity-follows-use-case.md)).
 - **Standalone scripts**: each script is a single file that works when copied onto a server by itself; never source shared code.
-- **Self-update block**: every Linux bash script embeds its own copy of the self-update functions immediately after `set -euo pipefail` (see `.github/copilot-instructions.md` for the template) — update `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` per script. Updates are moving to verified releases ([ADR 0001](docs/adr/0001-gated-self-update-from-releases.md)).
+- **Self-update block**: every Linux bash script embeds its own copy of the self-update functions immediately after `set -euo pipefail`. Copy it from `.github/self-update.template.sh` and change only `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE`; CI fails if a copy drifts. Updates are moving to verified releases ([ADR 0001](docs/adr/0001-gated-self-update-from-releases.md)).
 - **PID locking**: required when the script can run on a schedule and overlap itself, or writes shared state (`mysql-backup.sh`, `monitor-cpu-load.sh`). Use a PID file + `trap ... EXIT`. Read-only scanners don't need it.
 - **Restrictive permissions (`umask 077`)**: required when the script writes backups, state files or reports that may contain sensitive data.
 - **Security**: never hardcode credentials — Windows scripts use a `<password_for_mysql>` placeholder; Linux scripts use Plesk's `plesk db` command.
@@ -67,7 +67,7 @@ No automated test suite. Validation is manual:
 
 ## CI/CD
 
-No CI currently existed prior to this change — see `.github/workflows/ci.yml` (shellcheck on changed `.sh` files) added alongside this file.
+`.github/workflows/ci.yml` runs two jobs: shellcheck on all `.sh` files, and `.github/scripts/check-self-update.sh`, which verifies every script's self-update block against `.github/self-update.template.sh` (matching core, `SCRIPT_RELATIVE_PATH` equals the file path, unique `UPDATE_CHECK_FILE`). Run both locally before opening a PR.
 
 ## Adding a New Script
 

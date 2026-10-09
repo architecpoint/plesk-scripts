@@ -11,6 +11,7 @@ This project does not follow semantic versioning (it is a script collection, not
 
 - `AGENTS.md`, maintenance matrix, CI workflow, issue/PR templates, and this changelog (AI-ready repo setup).
 - `monitor-cpu-load/monitor-cpu-load.sh`: sustained CPU load monitor for AlmaLinux Plesk servers with per-subscription attribution, attack detection, fail2ban-aware alert suppression, and email alerts.
+- Each Linux bash script embeds its own copy of the self-update block; `.github/self-update.template.sh` is the canonical source and the CI job `Self-update block drift check` (`.github/scripts/check-self-update.sh`) fails if a copy drifts.
 - `GLOSSARY.md` with the domain terms for the CPU load monitor.
 - ADRs in `docs/adr/` for gated self-update from releases and for platform parity following the script's use case.
 

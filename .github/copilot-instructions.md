@@ -320,7 +320,7 @@ When you change... | ...also update
 `essential-plugin-malware-scan/essential-plugin-scan.sh` | `README.md` Essential Plugin Scanner section (Linux-only, no `.bat` counterpart)
 `monitor-domain-hosting/monitor-aspnet.bat` | `README.md` Domain Hosting Monitor section (Windows-only, no `.sh` counterpart)
 `monitor-cpu-load/monitor-cpu-load.sh` | `README.md` CPU Load Monitor sections, `GLOSSARY.md` if domain terms change (Linux-only, no `.bat` counterpart)
-Any bash script's self-update block | `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` constants inside that same script only — self-update blocks are copy-pasted per script, not shared
+Any bash script's self-update block | `.github/self-update.template.sh` first (the canonical copy), then every script's copy; only `SCRIPT_RELATIVE_PATH` and `UPDATE_CHECK_FILE` may differ. CI (`.github/scripts/check-self-update.sh`) enforces this. Blocks are copied per script, not shared
 Any script's env vars / CLI flags | That script's header comment block and its `README.md` section
 
 ## Common Pitfalls
