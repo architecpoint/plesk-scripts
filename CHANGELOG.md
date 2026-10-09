@@ -7,6 +7,8 @@ This project does not follow semantic versioning (it is a script collection, not
 
 ## [Unreleased]
 
+## v2026.10.09
+
 ### Added
 
 - `AGENTS.md`, maintenance matrix, CI workflow, issue/PR templates, and this changelog (AI-ready repo setup).
