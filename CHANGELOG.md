@@ -7,6 +7,8 @@ This project does not follow semantic versioning (it is a script collection, not
 
 ## [Unreleased]
 
+## v2026.10.09-3
+
 ### Removed
 
 - Copilot instruction files for Debian, Fedora, WordPress, PowerShell and web-app security: the repo has no matching code (Bash and Batch only), and they loaded into every session.
