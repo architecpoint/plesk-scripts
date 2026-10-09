@@ -13,7 +13,7 @@ pci-dss-scan/                     PCI-DSS security header compliance scanner (Wi
 essential-plugin-malware-scan/    WordPress supply-chain backdoor scanner (Linux only)
 monitor-domain-hosting/           ASP.NET hosting setting monitor + email alerts (Windows only)
 monitor-cpu-load/                 Sustained CPU load monitor with fail2ban-aware email alerts (AlmaLinux Plesk only)
-.github/instructions/             Path-scoped Copilot instructions (shell, PowerShell, markdown, security, etc.)
+.github/instructions/             Path-scoped Copilot instructions (bash, markdown, CentOS/RHEL, GitHub Actions, commenting, docs sync)
 .github/agents/, .github/skills/  Custom Copilot agents and skills
 README.md                         User-facing docs — must stay in sync with script features
 ```
