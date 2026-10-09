@@ -40,7 +40,9 @@ Most Linux scripts support `AUTO_UPDATE=true` and manual `--update`/`--self-upda
 
 ## Testing
 
-No automated test suite. Validation is manual:
+Write and change files with the edit/create tools; use bash only to run programs.
+
+No automated test suite for the data-handling scripts. Validation is manual:
 
 - Lint every changed bash script: `shellcheck path/to/script.sh`
 - Test in a staging/dev Plesk environment before merging — many scripts assume Plesk CLI/MySQL credentials are present.
@@ -67,7 +69,7 @@ No automated test suite. Validation is manual:
 
 ## CI/CD
 
-`.github/workflows/ci.yml` runs two jobs: shellcheck on all `.sh` files, and `.github/scripts/check-self-update.sh`, which verifies every script's self-update block against `.github/self-update.template.sh` (matching core, `SCRIPT_RELATIVE_PATH` equals the file path, unique `UPDATE_CHECK_FILE`). Run both locally before opening a PR.
+`.github/workflows/ci.yml` runs four jobs: shellcheck on all `.sh` files; `.github/scripts/check-self-update.sh`, which verifies every script's self-update block against `.github/self-update.template.sh` (matching core, `SCRIPT_RELATIVE_PATH` equals the file path, unique `UPDATE_CHECK_FILE`); `.github/scripts/test-self-update.sh`, which runs the gated updater against a stubbed `curl` (update, pin, checksum mismatch, no release, bad version); and actionlint on the workflows. Run the first three locally before opening a PR.
 
 **Releases:** never tag by hand. `release-pr.yml` opens/updates a "Release vYYYY.MM.DD" PR (renaming `[Unreleased]` in `CHANGELOG.md`) on pushes to `main` that have unreleased entries; merging it triggers `release.yml`, which re-runs shellcheck and the drift check, then creates the tag and release with `SHA256SUMS`. Requires the repo setting *Actions → Allow GitHub Actions to create pull requests*.
 
