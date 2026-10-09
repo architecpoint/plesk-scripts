@@ -1,589 +1,154 @@
 # Plesk Scripts
 
-A collection of utility scripts for automating common Plesk server management tasks, including MySQL database backups, WordPress backup cleanup, PCI-DSS security header compliance scanning, and domain hosting setting monitoring.
+Standalone automation scripts for Plesk server administration: MySQL backups, WordPress backup cleanup, PCI-DSS header scanning, WordPress malware scanning, and hosting and CPU monitoring.
 
 ⭐ If you like this project, star it on GitHub — it helps a lot!
 
-[Overview](#overview) • [Scripts](#scripts) • [Getting Started](#getting-started) • [Usage](#usage)
+[Scripts](#scripts) • [Getting Started](#getting-started) • [Self-Update](#self-update) • [Best Practices](#best-practices) • [Security](#security-considerations) • [Contributing](#contributing)
 
 ## Overview
 
-This repository provides ready-to-use scripts for Plesk server administrators to automate routine maintenance tasks. Whether you're managing MySQL databases or WordPress installations, these scripts help streamline your server operations with minimal configuration.
-
-**Key Features:**
-- MySQL database backup automation for Windows and Linux
-- Automated cleanup of old WordPress backup files
-- PCI-DSS security header compliance scanning for hosted websites
-- Essential Plugin supply-chain attack scanner for WordPress sites
-- Domain hosting setting monitoring with email alerts (Windows)
-- Sustained CPU load monitoring with per-subscription attribution and fail2ban-aware alerts (Linux)
-- Simple configuration with environment variables
-- Compatible with Plesk's built-in tools
+Each folder is a self-contained tool you can copy onto a server by itself. Scripts are written for Plesk Obsidian and configured through environment variables, so they need little setup. Linux scripts are bash (`.sh`); Windows scripts are batch (`.bat`). Each folder has its own README with usage, configuration and troubleshooting.
 
 ## Scripts
 
-### MySQL Backups
+| Script | Platform | Purpose |
+| --- | --- | --- |
+| [MySQL Backups](./mysql-backups/README.md) | Linux, Windows | Back up every MySQL database to one SQL dump each, excluding system databases |
+| [Remove Old WordPress Backups](./remove-old-wordpress-backups/README.md) | Linux | Delete WordPress backups past a retention period, keeping the newest few per domain; optional email report and dry-run |
+| [Essential Plugin Scanner](./essential-plugin-malware-scan/README.md) | Linux | Scan WordPress sites for the Essential Plugin supply-chain backdoor and report per-site status |
+| [PCI-DSS Scanner](./pci-dss-scan/README.md) | Linux, Windows | Check a website for banner, cookie, cache and security header issues flagged by PCI-DSS scanners |
+| [Monitor Domain Hosting Settings](./monitor-domain-hosting/README.md) | Windows | Email an alert when a domain's ASP.NET setting is disabled, and again when it is restored |
+| [Monitor Sustained CPU Load](./monitor-cpu-load/README.md) | Linux (AlmaLinux) | Detect sustained CPU load, attribute it to subscriptions, and alert unless fail2ban is already handling the attack |
 
-Automated MySQL database backup scripts for Plesk servers.
+Only MySQL Backups and the PCI-DSS Scanner ship both Windows and Linux versions. The Windows versions may be a documented subset. New scripts are Linux-only unless the task needs Windows. See [ADR 0002](./docs/adr/0002-platform-parity-follows-use-case.md).
 
-**Available versions:**
-- `mysql-backup.bat` - Windows batch script
-- `mysql-backup.sh` - Linux shell script
-
-**Features:**
-- Backs up all MySQL databases
-- Uses Plesk's MySQL credentials
-- Creates individual SQL dump files per database
-- Excludes system databases (information_schema, performance_schema, phpmyadmin)
-- Automatically removes orphaned backup files for deleted databases
-- Enhanced error handling and detailed logging
-- Success/failure tracking with exit codes
-- Self-update capability for automatic script updates
-
-[Learn more →](./mysql-backups)
-
-### Remove Old WordPress Backups
-
-Automatically clean up old WordPress backup files to free up disk space.
-
-**Features:**
-- Scans all WordPress installations in Plesk vhosts
-- Removes backups older than a specified number of days (default: 365 days)
-- Always keeps a minimum number of most recent backups per domain (default: 3)
-- Optional HTML email report of backups found/removed per domain, including newest/oldest backup dates and disk space used
-- Dry-run mode to preview deletions without removing files
-- Configurable retention period via environment variables
-- Safe deletion with proper error handling
-- Detailed logging with timestamps
-- Exit codes for automation and monitoring
-- Self-update capability for automatic script updates
-
-[Learn more →](./remove-old-wordpress-backups)
-
-### Essential Plugin Supply-Chain Attack Scanner
-
-Scans all WordPress installations on a Plesk server for the Essential Plugin supply-chain attack (April 2026), in which 31 plugins were weaponized after the portfolio was acquired via Flippa and backdoored 8 months before activation.
-
-**Features:**
-- Detects all 31 affected plugin slugs from the Essential Plugin portfolio
-- Checks for the `wpos-analytics/` PHP deserialization backdoor module
-- Scans PHP files for known code signatures (`fetch_ver_info`, `version_info_clean`, etc.)
-- Detects the `wp-comments-posts.php` malware dropper file
-- Flags `wp-config.php` infection via unusual file size and C2 domain references
-- Broad C2 domain scan (`analytics.essentialplugin.com`) across all site PHP files
-- Colour-coded per-site status (`CLEAN` / `BACKDOOR PRESENT` / `ACTIVELY COMPROMISED`)
-- Detailed remediation instructions for each affected site
-- Self-update capability with automatic or manual updates
-
-[Learn more →](./essential-plugin-malware-scan)
-
-### Monitor Domain Hosting Settings
-
-Monitor Plesk hosting settings for a specific domain and receive email alerts when a setting changes. Currently detects Microsoft ASP.NET being disabled.
-
-**Available versions:**
-- `monitor-aspnet.bat` - Windows batch script
-
-**Features:**
-- Reads Microsoft ASP.NET enabled status directly from the Plesk database (`psa.hosting`)
-- SMTP relay configured directly in the script to match your Plesk external SMTP settings
-- Tracks state between runs — only alerts on change, no duplicate notifications
-- Sends an ALERT email when ASP.NET becomes disabled
-- Sends a RESOLVED email when ASP.NET is re-enabled after being disabled
-- Suitable for Plesk Scheduled Tasks (recommended interval: every 15 minutes)
-
-[Learn more →](./monitor-domain-hosting)
-
-### PCI-DSS Security Header Compliance Scanner
-
-Scan a website for the security header issues most commonly flagged by PCI-DSS compliance tools (e.g., PayPal's `paypal.managepci.com` scanner).
-
-**Available versions:**
-- `pci-dss-scan.bat` - Windows batch script
-- `pci-dss-scan.sh` - Linux shell script
-
-**Features:**
-- Detects `X-Powered-By`, `Server`, and other banner-disclosure headers (PCI DSS Req. 2.2 / 6.5)
-- Checks all `Set-Cookie` headers for missing `Secure`, `HttpOnly`, and `SameSite` flags
-- Validates `Cache-Control` headers on sensitive pages (login, checkout, cart, admin) and public pages
-- Checks for additional best-practice headers: `X-Frame-Options`, `Strict-Transport-Security`, `Content-Security-Policy`, etc.
-- Tests multiple paths automatically, including WordPress login, WooCommerce checkout, and custom registration pages
-- Colour-coded `[PASS]` / `[FAIL]` / `[WARN]` output with a final pass/fail summary
-- Exit code equals the number of failures (suitable for CI/CD pipelines)
-- Self-update capability with automatic or manual updates (Linux)
-
-[Learn more →](./pci-dss-scan)
-
-### Monitor Sustained CPU Load
-
-Detect sustained high CPU load on an AlmaLinux Plesk server, find which subscriptions cause it, and email an alert. Attacks that fail2ban is already banning don't trigger an alert.
-
-**Available versions:**
-- `monitor-cpu-load.sh` - Linux shell script (root required)
-
-**Features:**
-- Alerts on sustained load only: by default, at least 80% of 5-minute samples above 1.0 × CPU cores across a 30-minute window
-- Attributes CPU to Plesk subscriptions through the system user that owns each process
-- Analyzes the access logs of the busiest subscriptions for offenders: IPs in any fail2ban jail (except `ssh`/`sshd`) plus IPs with a bot-scan pattern (high request rate, many 401/403/404, probe paths)
-- Suppresses the alert when banned offenders are at least 80% of the attack traffic; sends a lower-urgency `[NOTICE]` if load is still high a full window later
-- Labels the likely cause: attack-like traffic, web application, database or other process
-- `[ALERT]`, `[REMINDER]` and `[RESOLVED]` HTML emails with an alert cooldown, plus an incident log at `/var/log/plesk-cpu-monitor.log`
-- Read-only: never bans IPs or changes server settings
-- PID locking and self-update capability
-
-[Learn more →](./monitor-cpu-load)
+Domain terms (subscription, sustained load, retention, and others) are defined in the [glossary](./GLOSSARY.md).
 
 ## Getting Started
 
 ### Prerequisites
 
-**For Linux scripts:**
-- Plesk server (Linux)
-- Shell access with appropriate permissions
-- `plesk` CLI tool available
+**Linux scripts:**
 
-**For Windows scripts:**
-- Plesk server (Windows)
-- Administrator access
-- MySQL admin password
+- Plesk server (Linux) with shell access
+- The `plesk` CLI (`/usr/sbin/plesk`) for scripts that use Plesk's database or settings
+- `curl` (or `wget` as a fallback) and `sha256sum` for self-update; the PCI-DSS scanner also needs `curl`
+
+**Windows scripts:**
+
+- Plesk server (Windows) and administrator access
+- The Plesk MySQL admin password, for scripts that read the database
 
 ### Installation
 
-1. Clone this repository or download the scripts you need:
+1. Download the script folder you need, or clone the repository:
+
    ```bash
    git clone https://github.com/architecpoint/plesk-scripts.git
    cd plesk-scripts
    ```
 
-2. Make scripts executable (Linux only):
+2. Make Linux scripts executable:
+
    ```bash
    chmod +x mysql-backups/mysql-backup.sh
    chmod +x remove-old-wordpress-backups/remove-wordpress-backups.sh
    chmod +x pci-dss-scan/pci-dss-scan.sh
    chmod +x essential-plugin-malware-scan/essential-plugin-scan.sh
+   chmod +x monitor-cpu-load/monitor-cpu-load.sh
    ```
 
-3. Configure the scripts according to your environment (see individual script documentation).
+3. Configure the script as described in its folder README, test it in a non-production environment, then schedule it.
 
-## Usage
+## Self-Update
 
-### Self-Update Feature
-
-All Linux scripts include built-in self-update capability to ensure you're always running the latest version from GitHub.
+Every Linux script can update itself from a GitHub release. Updates are gated: the script downloads the file from the release tag and checks it against the release's `SHA256SUMS` before installing. A failed check keeps the current version. See [ADR 0001](./docs/adr/0001-gated-self-update-from-releases.md).
 
 **Manual update:**
+
 ```bash
-# Update the script to the latest version
 ./mysql-backups/mysql-backup.sh --update
-./remove-old-wordpress-backups/remove-wordpress-backups.sh --update
-./pci-dss-scan/pci-dss-scan.sh --update
-./essential-plugin-malware-scan/essential-plugin-scan.sh --update
 ```
 
-**Automatic updates (recommended for cron):**
-```bash
-# Enable auto-update with environment variable
-AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
-AUTO_UPDATE=true ./pci-dss-scan/pci-dss-scan.sh https://example.com
+**Automatic updates (cron):**
 
-# Configure in cron for automatic updates
+```bash
+# Enable with an environment variable
+AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+
+# Daily at 2 AM
 0 2 * * * AUTO_UPDATE=true /path/to/plesk-scripts/mysql-backups/mysql-backup.sh
 ```
 
-**Configuration:**
-- `AUTO_UPDATE` - Set to `true` to enable automatic updates (default: `false`)
-- `UPDATE_CHECK_INTERVAL` - Hours between update checks (default: `24`)
-- `UPDATE_VERSION` - Release tag to install, e.g. `v2026.05.01` (default: latest release). Updates are downloaded from a GitHub release and verified against its `SHA256SUMS` before being installed; a failed check keeps the current version. Requires `sha256sum`.
+**Settings (all Linux scripts):**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AUTO_UPDATE` | `false` | `true` enables automatic updates |
+| `UPDATE_CHECK_INTERVAL` | `24` | Hours between update checks |
+| `UPDATE_VERSION` | latest release | Release tag to install, for example `v2026.05.01` |
 
 **How it works:**
-1. Each script contains embedded self-update functionality (no external dependencies)
-2. When enabled, scripts check for updates from the GitHub repository
-3. If a newer version is found, it's downloaded and validated
-4. The current version is backed up to `<script-name>.backup`
-5. The new version is installed atomically
-6. The script restarts automatically with the updated version
-7. Works silently in cron with no user interaction required
 
-### MySQL Backup Scripts
+1. Each script embeds its own update logic; there is no external dependency.
+2. When enabled, it resolves the latest GitHub release (or `UPDATE_VERSION`).
+3. It downloads the script from that tag and verifies it against `SHA256SUMS`.
+4. The current version is backed up to `<script-name>.backup`.
+5. The new version is installed atomically and the script restarts.
+6. It runs silently in cron.
 
-**Linux:**
-```bash
-# Run backup manually
-./mysql-backups/mysql-backup.sh
+### Self-update troubleshooting
 
-# Run backup with auto-update enabled
-AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+**The script cannot download updates**
 
-# Schedule with cron (daily at 2 AM with auto-update)
-0 2 * * * AUTO_UPDATE=true /path/to/plesk-scripts/mysql-backups/mysql-backup.sh
-```
-
-**Windows:**
-```cmd
-# Update the script with your MySQL admin password first
-# Then run manually or schedule with Task Scheduler
-mysql-backups\mysql-backup.bat
-```
-
-> [!NOTE]
-> For Windows, you must replace `<password_for_mysql>` in the batch file with your actual MySQL admin password before running.
-
-### Remove Old WordPress Backups
-
-```bash
-# Preview what would be deleted without actually removing files (dry-run mode)
-./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
-
-# Run with default settings (removes backups older than 365 days)
-./remove-old-wordpress-backups/remove-wordpress-backups.sh
-
-# Run with custom retention period (e.g., 180 days)
-DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
-
-# Preview custom retention period before deleting
-DAYS=180 ./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
-
-# Always keep at least 5 most recent backups per domain, even if older than DAYS
-MIN_KEEP=5 ./remove-old-wordpress-backups/remove-wordpress-backups.sh
-
-# Email a per-domain report of backups found/removed (requires the 'mail' command)
-EMAIL_TO="admin@example.com" ./remove-old-wordpress-backups/remove-wordpress-backups.sh
-
-# Email the report via an SMTP relay when no local MTA is available (uses curl)
-EMAIL_TO="admin@example.com" SMTP_SERVER="mail.example.com" SMTP_PORT=587 SMTP_SECURE=starttls \
-  SMTP_AUTH_USER="relay-user" SMTP_AUTH_PASS="relay-pass" \
-  ./remove-old-wordpress-backups/remove-wordpress-backups.sh
-
-# Run with auto-update enabled
-AUTO_UPDATE=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
-
-# Schedule with cron (weekly on Sundays at 3 AM with auto-update)
-0 3 * * 0 AUTO_UPDATE=true /path/to/plesk-scripts/remove-old-wordpress-backups/remove-wordpress-backups.sh
-```
-
-### Essential Plugin Malware Scanner
-
-```bash
-# Scan all WordPress sites on the server
-./essential-plugin-malware-scan/essential-plugin-scan.sh
-
-# Scan a custom vhosts directory
-WP_VHOSTS_DIR=/srv/www ./essential-plugin-malware-scan/essential-plugin-scan.sh
-
-# Update the script to the latest version
-./essential-plugin-malware-scan/essential-plugin-scan.sh --update
-
-# Run with auto-update enabled (recommended for one-off use)
-AUTO_UPDATE=true ./essential-plugin-malware-scan/essential-plugin-scan.sh
-```
-
-**Interpreting results:**
-- `[OK]` — No affected plugins or indicators found on this site.
-- `[WARN]` — An affected plugin slug is present but the backdoor module appears already removed.
-- `[DANGER]` — A specific IOC (backdoor module, dropper file, C2 reference) was found.
-- `STATUS: CLEAN` — No indicators detected.
-- `STATUS: AFFECTED PLUGIN DETECTED` — Affected plugin slug(s) found but the `wpos-analytics/` backdoor module is absent (plugin appears already patched or cleaned).
-- `STATUS: BACKDOOR PRESENT` — The `wpos-analytics/` module exists; activation may not have occurred yet.
-- `STATUS: ACTIVELY COMPROMISED` — Evidence of a successful payload delivery (oversized `wp-config.php`, C2 references, dropper file).
-
-### Monitor Domain Hosting Settings
-
-```cmd
-:: Monitor a domain and alert recipient@example.com if ASP.NET is disabled
-monitor-domain-hosting\monitor-aspnet.bat example.com recipient@example.com
-```
-
-**Before first run**, open `monitor-aspnet.bat` and set:
-1. `MYSQL_PASSWORD` — replace `<password_for_mysql>` with your Plesk MySQL admin password
-2. `SMTP_SERVER` — set to your external SMTP relay hostname (matches **Tools & Settings → Mail Server Settings → External SMTP**)
-3. `SMTP_PORT` — typically `25`, `465` (SSL), or `587` (STARTTLS)
-4. `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` — set if your relay requires authentication, leave blank otherwise
-5. `SMTP_SECURE` — set to `ssl` or `starttls` if required, leave blank for plain SMTP
-
-**Plesk Scheduled Tasks setup (every 15 minutes):**
-1. In Plesk go to **Tools & Settings** → **Scheduled Tasks** → **Add Task**
-2. Set **Command** to:
-   ```
-   "C:\Scripts\monitor-aspnet.bat" example.com admin@example.com
-   ```
-   Replace `example.com` and `admin@example.com` with the actual domain and recipient.
-3. Set the **Schedule** to `0,15,30,45 * * * *` (every 15 minutes)
-4. Ensure the task runs as a user with read access to the Plesk MySQL database (the `System` or `Administrator` account is typical)
-5. Click **OK** to save
-
-**How it works:**
-- On each run the script queries Plesk for the current ASP.NET status and compares it to the last known state stored in `%TEMP%\plesk-monitor\`
-- An ALERT email is sent only when ASP.NET transitions from enabled → disabled (no repeated emails while it stays disabled)
-- A RESOLVED email is sent when ASP.NET is re-enabled
-- State is stored per-domain, so multiple domains can be monitored with separate scheduled tasks
-
-### PCI-DSS Scanner
-
-**Linux:**
-```bash
-# Scan a target domain
-./pci-dss-scan/pci-dss-scan.sh https://example.com
-
-# Scan with auto-update enabled
-AUTO_UPDATE=true ./pci-dss-scan/pci-dss-scan.sh https://example.com
-
-# Add extra paths to test (space-separated)
-EXTRA_PATHS="/members/ /sign-up/" ./pci-dss-scan/pci-dss-scan.sh https://example.com
-```
-
-**Windows:**
-```cmd
-:: Scan a target domain
-pci-dss-scan\pci-dss-scan.bat https://example.com
-```
-
-**Interpreting results:**
-- `[PASS]` — The check passed; no action required.
-- `[FAIL]` — A PCI-DSS required control is missing or misconfigured; must be remediated before re-scanning.
-- `[WARN]` — A best-practice header or flag is absent; review and apply if possible.
-- The script exits with a code equal to the number of `[FAIL]` results (0 = all clear).
-
-### Monitor Sustained CPU Load
-
-Run as root every 5 minutes, from root's crontab or a Plesk Scheduled Task. It needs about 30 minutes to collect samples before it can alert.
-
-```bash
-# Schedule with cron (every 5 minutes, alerts to an address)
-*/5 * * * * EMAIL_TO=ops@example.com SMTP_SERVER=smtp.example.com /root/monitor-cpu-load.sh >/dev/null 2>&1
-
-# See the current analysis without alerting
-./monitor-cpu-load/monitor-cpu-load.sh --report > /tmp/cpu-report.html
-```
-
-**Reading the results:**
-- `[ALERT]` - Sustained load that fail2ban is not handling; the email lists CPU per subscription, busiest offenders (with the jails holding them) and the likely cause
-- `[NOTICE]` - fail2ban is banning the attack but load stayed high for another full window
-- `[REMINDER]` / `[RESOLVED]` - Incident still ongoing every `REMINDER_HOURS`, and back to normal
-
-## Configuration
-
-### MySQL Backup Configuration
-
-**Linux (`mysql-backup.sh`):**
-- Backup location: `/backup/mysql/data/`
-- Automatically uses Plesk database credentials
-
-**Windows (`mysql-backup.bat`):**
-- Backup location: `%plesk_dir%\Databases\MySQL\backup\`
-- Requires manual MySQL password configuration
-
-### WordPress Backup Cleanup Configuration
-
-**Environment Variables:**
-- `DAYS` - Number of days to keep backups (default: `365`)
-  - Example: `DAYS=180` keeps backups for 6 months
-- `MIN_KEEP` - Minimum number of most recent backups to always keep per domain, regardless of age (default: `3`)
-  - Example: `MIN_KEEP=5` never deletes a domain's 5 newest backups even if older than `DAYS`
-- `DRY_RUN` - Set to `true` to enable dry-run mode (default: `false`)
-  - Example: `DRY_RUN=true` previews deletions without removing files
-- `EMAIL_TO` - Email address to receive the per-domain report (default: unset, no email sent)
-  - Sent as an HTML email. If `SMTP_SERVER` is set, sends directly via `curl` (bypassing the local `mail` command entirely); otherwise falls back to the local `mail` command
-  - Report includes a summary (with total disk space), backups removed (or would-remove in dry-run) per domain with filenames, dates and sizes, and a backups-found table per domain with newest/oldest backup dates and disk space used
-- `EMAIL_SUBJECT` - Subject line for the email report (default: `WordPress Backup Cleanup Report - <hostname>`)
-- `EMAIL_ONLY_ON_DELETIONS` - Set to `true` to only send the email when at least one backup was actually deleted, skipping the report on runs where nothing was eligible (default: `false`)
-- `SMTP_SERVER` - SMTP relay hostname; when set, takes priority over the local `mail` command (default: unset)
-- `SMTP_PORT` - SMTP relay port (default: `25`)
-- `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` - SMTP credentials, leave unset for an unauthenticated relay (default: unset)
-- `SMTP_SECURE` - SMTP security: blank for plain, `ssl` for implicit TLS (typically port 465), `starttls` for explicit STARTTLS (typically port 587) (default: blank)
-- `SMTP_FROM` - Sender address (default: `plesk-monitor@<hostname>`)
-
-**Command-line Options:**
-- `--dry-run` or `-n` - Preview deletions without removing files
-- `--update` or `--self-update` - Update script to latest version from GitHub
-
-### Essential Plugin Scanner Configuration
-
-**Environment Variables:**
-- `WP_VHOSTS_DIR` - Root directory to scan for WordPress installations (default: `/var/www/vhosts`)
-  - Example: `WP_VHOSTS_DIR=/srv/www ./essential-plugin-malware-scan/essential-plugin-scan.sh`
-
-**Command-line Options:**
-- `--update` or `--self-update` - Update script to latest version from GitHub
-
-### PCI-DSS Scanner Configuration
-
-**Environment Variables:**
-- `TARGET_URL` - Set the target domain (required if not passed as an argument)
-  - Example: `TARGET_URL=https://example.com ./pci-dss-scan/pci-dss-scan.sh`
-- `EXTRA_PATHS` - Space-separated list of extra URL paths to include in cookie and header checks
-  - Example: `EXTRA_PATHS="/members/ /sign-up/"`
-
-**Command-line Options:**
-- First argument - Target URL (overrides `TARGET_URL` env var)
-  - Example: `./pci-dss-scan/pci-dss-scan.sh https://example.com`
-- `--update` or `--self-update` - Update script to latest version from GitHub (Linux only)
-
-### CPU Load Monitor Configuration
-
-**Environment Variables:**
-- `EMAIL_TO` - Address that receives alerts (default: unset, log only)
-- `LOAD_THRESHOLD_FACTOR` - Load threshold as a multiple of CPU cores (default: `1.0`)
-- `WINDOW_MINUTES` / `SAMPLE_INTERVAL_MINUTES` / `SUSTAINED_PERCENT` - Sustained-load rule and cron interval (default: `30` / `5` / `80`)
-- `HANDLED_PERCENT` - Share of attack traffic from banned IPs at which fail2ban counts as handling it (default: `80`)
-- `ATTACK_SHARE_PERCENT` - Share of requests from offenders that makes the load attack-like (default: `50`)
-- `ANALYSIS_MINUTES`, `MAX_LOG_LINES`, `TOP_SUBSCRIPTIONS` - Access log analysis scope (default: `30`, `500000`, `3`)
-- `OFFENDER_RPM`, `OFFENDER_BAD_MIN`, `OFFENDER_PROBE_MIN`, `PROBE_PATTERN` - Offender heuristics for IPs fail2ban hasn't banned
-- `F2B_EXCLUDE_JAILS` - fail2ban jails ignored when collecting banned IPs (default: `ssh sshd`)
-- `ALERT_COOLDOWN_MINUTES`, `REMINDER_HOURS` - Alert pacing (default: `60`, `6`)
-- `LOG_ROOT`, `STATE_DIR`, `LOG_FILE` - Plesk log root, state directory, incident log (default: `/var/www/vhosts/system`, `/var/lib/plesk-cpu-monitor`, `/var/log/plesk-cpu-monitor.log`)
-- `SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`, `SMTP_FROM` - SMTP relay, same as the WordPress backup cleanup (falls back to the local `mail` command)
-
-**Command-line Options:**
-- `--report` - Print the current analysis as HTML; no email, no state change
-- `--update` or `--self-update` - Update script to latest version from GitHub
-
-1. **Test scripts first** - Always test scripts in a non-production environment before deploying
-2. **Use dry-run mode** - Preview deletions with `--dry-run` flag before running cleanup scripts
-3. **Monitor disk space** - Ensure adequate storage for database backups
-4. **Verify backups** - Regularly test backup restoration procedures
-5. **Schedule wisely** - Run backups during off-peak hours to minimize server load
-6. **Review logs** - Check cron logs or Task Scheduler history for script execution status
-7. **Enable auto-update** - Set `AUTO_UPDATE=true` in cron jobs to keep scripts up-to-date automatically
-8. **Check update logs** - Review `[UPDATE]` log entries to confirm successful updates
-
-## Troubleshooting
-
-### Self-Update Issues
-
-**Problem:** Script cannot download updates
 ```bash
 # Verify curl or wget is installed
 which curl wget
 
 # Test GitHub connectivity
-curl -I https://raw.githubusercontent.com/architecpoint/plesk-scripts/main/README.md
+curl -I https://github.com/architecpoint/plesk-scripts/releases/latest
 ```
 
-**Problem:** Update check happens too frequently
+**Update checks happen too often**
+
 ```bash
-# Increase check interval to 7 days (168 hours)
+# Check every 7 days (168 hours)
 UPDATE_CHECK_INTERVAL=168 AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
 
-# Or disable auto-update and use manual updates
+# Or disable auto-update and update manually
 ./mysql-backups/mysql-backup.sh --update
 ```
 
-**Problem:** Script updated but using wrong branch
+**You need a specific version**
+
 ```bash
-# Specify branch explicitly (e.g., develop, main)
 UPDATE_VERSION=v2026.05.01 AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
 ```
 
-### MySQL Backup Issues
+## Best Practices
 
-**Problem:** Script cannot connect to MySQL
-```bash
-# Verify Plesk database access
-plesk db -e "show databases"
-```
-
-**Problem:** Permission denied
-```bash
-# Ensure script has execute permissions
-chmod +x mysql-backup.sh
-```
-
-### Essential Plugin Scanner Issues
-
-**Problem:** No WordPress installations found
-```bash
-# Verify the vhosts directory path
-ls /var/www/vhosts
-
-# Override the search path if your Plesk uses a different location
-WP_VHOSTS_DIR=/srv/www ./essential-plugin-malware-scan/essential-plugin-scan.sh
-```
-
-**Problem:** wp-config.php flagged as large but site looks fine
-- Legitimate sites with many constants defined can exceed 8 KB — check the file manually
-- The key indicator is the `essentialplugin.com` domain or `wpos_analytics_anl` appearing on the same line as `require_once ABSPATH . 'wp-settings.php';`
-- If in doubt, compare the file against a clean backup from before April 6, 2026
-
-**Problem:** Plugin shows as affected but was already updated by WordPress.org
-- WordPress.org's forced update to v2.6.9.1 adds `return;` statements to disable phone-home but does **not** remove the `wpos-analytics/` directory
-- The backdoor module is still present and must be removed manually or via a patched zip
-- Check for `wpos-analytics/` in the plugin folder to confirm
-
-### PCI-DSS Scanner Issues
-
-**Problem:** Site is unreachable
-```bash
-# Verify connectivity manually
-curl -I https://example.com
-```
-
-**Problem:** Cookies not being detected on protected/login pages
-- The scanner tests unauthenticated requests; authenticated session cookies will only appear after login
-- Log in via a browser, capture cookies with browser dev tools, and compare flag settings manually
-- Or use `EXTRA_PATHS` to add any pages that set cookies before authentication
-
-**Problem:** Some paths return 404 and are skipped
-- Confirm the path exists on the target site (e.g., the shop or donate page may be at a different slug)
-- Use `EXTRA_PATHS` to add the correct paths: `EXTRA_PATHS="/give/ /events/" ./pci-dss-scan/pci-dss-scan.sh`
-
-**Problem:** ANSI colours not displaying in Windows CMD
-- Run from Windows Terminal or PowerShell, which support ANSI escape codes
-- Or pipe output to a file: `pci-dss-scan.bat > results.txt`
-
-### WordPress Backup Cleanup Issues
-
-**Problem:** Want to verify what will be deleted before running
-```bash
-# Use dry-run mode to preview deletions
-./remove-old-wordpress-backups/remove-wordpress-backups.sh --dry-run
-
-# Or with environment variable
-DRY_RUN=true ./remove-old-wordpress-backups/remove-wordpress-backups.sh
-```
-
-**Problem:** Files not being deleted
-- Check the backup path exists: `/var/www/vhosts/*/wordpress-backups`
-- Verify file permissions for the script user
-- Ensure correct `DAYS` value is set
-- Run with `--dry-run` flag to see what would be deleted
-
-### CPU Load Monitor Issues
-
-**Problem:** No alert although the server feels slow
-- Only sustained load alerts: at least `SUSTAINED_PERCENT` (80%) of samples over `WINDOW_MINUTES` (30) must exceed `LOAD_THRESHOLD_FACTOR` × cores
-- The first alert can only come after one full window of samples; check `/var/log/plesk-cpu-monitor.log` for `Collecting samples`
-- A `Sustained load is attack-like ... no alert` log line means fail2ban is already banning at least `HANDLED_PERCENT` of the attack traffic
-
-**Problem:** See what the script sees right now
-```bash
-# Prints the analysis as HTML without sending email or changing state
-./monitor-cpu-load/monitor-cpu-load.sh --report > /tmp/cpu-report.html
-```
-
-**Problem:** Email warns that fail2ban could not be checked
-- Confirm `fail2ban-client status` works as root; the script then treats nothing as banned and alerts normally
-
-**Problem:** CPU is not attributed to a subscription
-- Confirm `plesk db -Ne "SELECT 1"` works as root; processes run by users without a Plesk subscription are listed as system users
+1. **Test first.** Run scripts in a non-production environment before deploying.
+2. **Use dry-run mode.** Preview deletions with `--dry-run` before running cleanup scripts.
+3. **Monitor disk space.** Make sure there is enough storage for database backups.
+4. **Verify backups.** Test restoration regularly.
+5. **Schedule wisely.** Run backups off-peak.
+6. **Review logs.** Check cron logs or Task Scheduler history for run status.
+7. **Enable auto-update** in cron jobs, and check `[UPDATE]` log entries to confirm updates succeeded.
 
 ## Security Considerations
 
 > [!WARNING]
-> These scripts access sensitive server resources. Follow these security best practices:
+> These scripts access sensitive server resources. Follow these practices:
 
-- Store MySQL passwords securely (use environment variables or secure configuration files)
-- Restrict script permissions to authorized users only
-- Regularly review and audit script execution logs
-- Ensure backup directories have appropriate access controls
+- Never commit real passwords. Windows scripts use a `<password_for_mysql>` placeholder that you edit on the server only; Linux scripts use Plesk's `plesk db`.
+- Restrict script permissions to authorized users.
+- Review script execution logs regularly.
+- Keep backup directories access-controlled. Scripts that write backups, state or reports use `umask 077`.
 
 ## Contributing
 
-Contributions are welcome! If you have improvements or additional scripts for Plesk management:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to add or change a script, the checks CI runs, and how releases work.
 
 ## License
 
