@@ -65,6 +65,7 @@ No automated test suite for the data-handling scripts. Validation is manual:
 | `remove-old-wordpress-backups/remove-wordpress-backups.sh` | no | no |
 | `pci-dss-scan/pci-dss-scan.sh` | no | no |
 | `essential-plugin-malware-scan/essential-plugin-scan.sh` | no | no |
+
 - **System DB exclusion**: MySQL scripts always filter `information_schema`, `performance_schema`, `phpmyadmin`.
 
 ## CI/CD
@@ -106,3 +107,5 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 - Committing real MySQL/SMTP passwords instead of placeholders.
 - Forgetting `trap "rm -f ${PIDFILE}" EXIT`, leaving stale PID locks.
 - Skipping the README update after a feature change.
+
+See `.github/copilot-instructions.md` → **Common Pitfalls** for environment-specific ones (WSL line endings, curl/sha256sum, SMTP variables).
