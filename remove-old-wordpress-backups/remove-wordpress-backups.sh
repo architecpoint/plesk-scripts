@@ -29,7 +29,7 @@
 #   SMTP_FROM - Sender address (default: plesk-monitor@<hostname>)
 #   AUTO_UPDATE - Set to "true" to enable automatic updates (default: false)
 #   UPDATE_CHECK_INTERVAL - Hours between update checks (default: 24)
-#   GITHUB_BRANCH - GitHub branch to update from (default: main)
+#   UPDATE_VERSION - Release tag to install on update, e.g. v2026.05.01 (default: latest release)
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ set -euo pipefail
 
 # Self-update configuration
 GITHUB_REPO="architecpoint/plesk-scripts"
-GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
+UPDATE_VERSION="${UPDATE_VERSION:-latest}"
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 SCRIPT_RELATIVE_PATH="remove-old-wordpress-backups/remove-wordpress-backups.sh"
 UPDATE_CHECK_FILE="/tmp/.wordpress_backup_cleanup_update_check"
@@ -76,6 +76,43 @@ update_check_timestamp() {
     touch "${UPDATE_CHECK_FILE}" 2>/dev/null || true
 }
 
+# Function to download a URL to a file using curl or wget
+download_file() {
+    local url="$1"
+    local dest="$2"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -sSfL "${url}" -o "${dest}"
+    else
+        wget -q "${url}" -O "${dest}"
+    fi
+}
+
+# Function to resolve the release tag to install: UPDATE_VERSION, or the latest GitHub release
+resolve_release_tag() {
+    local tag="${UPDATE_VERSION}"
+
+    if [ "${tag}" = "latest" ]; then
+        local final_url=""
+        if command -v curl >/dev/null 2>&1; then
+            final_url=$(curl -sSfL -o /dev/null -w '%{url_effective}' "https://github.com/${GITHUB_REPO}/releases/latest") || return 1
+        else
+            final_url=$(wget -q --spider -S "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | awk '/^ *[Ll]ocation:/ {print $2}' | tail -n 1 | tr -d '\r') || return 1
+        fi
+        case "${final_url}" in
+            */releases/tag/*) tag="${final_url##*/releases/tag/}" ;;
+            *) return 1 ;;
+        esac
+    fi
+
+    # Release tags are dates: vYYYY.MM.DD, with -N for additional releases on the same day
+    if ! [[ "${tag}" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]]; then
+        return 1
+    fi
+
+    echo "${tag}"
+}
+
 # Function to perform self-update
 self_update() {
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
@@ -83,27 +120,52 @@ self_update() {
         return 1
     fi
     
-    local github_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${SCRIPT_RELATIVE_PATH}"
+    local release_tag
+    local release_url
+    local sums_url
     local temp_file="${SCRIPT_PATH}.update.$$"
+    local sums_file="${SCRIPT_PATH}.sums.$$"
     local backup_file="${SCRIPT_PATH}.backup"
+
+    if [ -n "${GITHUB_BRANCH:-}" ]; then
+        log_update "NOTICE: GITHUB_BRANCH is no longer used. Updates come from GitHub releases; set UPDATE_VERSION to pin a version."
+    fi
+
+    if ! release_tag=$(resolve_release_tag); then
+        log_update "ERROR: No release to install (none published, or invalid UPDATE_VERSION '${UPDATE_VERSION}'). Keeping current version."
+        return 1
+    fi
+    release_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${release_tag}/${SCRIPT_RELATIVE_PATH}"
+    sums_url="https://github.com/${GITHUB_REPO}/releases/download/${release_tag}/SHA256SUMS"
     
     log_update "Checking for updates from GitHub..."
-    log_update "Source: ${github_url}"
+    log_update "Release: ${release_tag}"
+    log_update "Source: ${release_url}"
     
     # Download the latest version
-    if command -v curl >/dev/null 2>&1; then
-        if ! curl -sSfL "${github_url}" -o "${temp_file}"; then
-            log_update "ERROR: Failed to download update from GitHub"
-            rm -f "${temp_file}"
-            return 1
-        fi
-    elif command -v wget >/dev/null 2>&1; then
-        if ! wget -q "${github_url}" -O "${temp_file}"; then
-            log_update "ERROR: Failed to download update from GitHub"
-            rm -f "${temp_file}"
-            return 1
-        fi
+    if ! download_file "${release_url}" "${temp_file}" || ! download_file "${sums_url}" "${sums_file}"; then
+        log_update "ERROR: Failed to download release ${release_tag} from GitHub"
+        rm -f "${temp_file}" "${sums_file}"
+        return 1
     fi
+
+    # Verify the file against the checksum published with the release
+    if ! command -v sha256sum >/dev/null 2>&1; then
+        log_update "ERROR: sha256sum not found. Cannot verify the update."
+        rm -f "${temp_file}" "${sums_file}"
+        return 1
+    fi
+    local expected_sum
+    local actual_sum
+    expected_sum=$(awk -v path="${SCRIPT_RELATIVE_PATH}" '$2 == path {print $1}' "${sums_file}")
+    actual_sum=$(sha256sum "${temp_file}" | awk '{print $1}')
+    rm -f "${sums_file}"
+    if [ -z "${expected_sum}" ] || [ "${expected_sum}" != "${actual_sum}" ]; then
+        log_update "ERROR: Checksum verification failed for ${SCRIPT_RELATIVE_PATH} (${release_tag}). Keeping current version."
+        rm -f "${temp_file}"
+        return 1
+    fi
+    log_update "Checksum verified for ${release_tag}"
     
     # Verify the downloaded file
     if [ ! -s "${temp_file}" ]; then

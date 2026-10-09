@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CHANGELOG.md'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          tag=$(grep -m1 -oE '^## v[0-9][^ ]*' CHANGELOG.md | sed 's/^## //' || true)
+          if [ -z "${tag}" ]; then
+            echo "No release heading in CHANGELOG.md; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! [[ "${tag}" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]]; then
+            echo "Invalid release tag '${tag}'" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate scripts
+        if: steps.tag.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          find . -type f -name '*.sh' -print0 | xargs -0 shellcheck --severity=warning
+          .github/scripts/check-self-update.sh
+
+      - name: Build checksums and release notes
+        if: steps.tag.outputs.publish == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git ls-files '*.sh' | grep -v '^\.github/' | sort | xargs sha256sum > SHA256SUMS
+          test -s SHA256SUMS
+          awk -v h="## ${TAG}" '$0 == h {f=1; next} /^## /{f=0} f' CHANGELOG.md > RELEASE_NOTES.md
+
+      - name: Create release
+        if: steps.tag.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "${TAG}" SHA256SUMS \
+            --title "${TAG}" \
+            --notes-file RELEASE_NOTES.md \
+            --target "${GITHUB_SHA}"
