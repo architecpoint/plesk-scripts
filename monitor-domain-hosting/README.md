@@ -25,15 +25,20 @@ monitor-aspnet.bat example.com recipient@example.com
 
 ## Configuration
 
-Set these variables at the top of `monitor-aspnet.bat` before the first run:
+Before the first run, edit `monitor-aspnet.bat`: replace the `MYSQL_PASSWORD` placeholder and set the SMTP defaults. Each SMTP value can also be overridden by an environment variable of the same name.
 
-| Variable | Description |
-| --- | --- |
-| `MYSQL_PASSWORD` | Replace `<password_for_mysql>` with your Plesk MySQL admin password |
-| `SMTP_SERVER` | External SMTP relay hostname |
-| `SMTP_PORT` | Typically `25`, `465` (SSL) or `587` (STARTTLS) |
-| `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` | Relay credentials; leave blank if not required |
-| `SMTP_SECURE` | `ssl` or `starttls` if required; blank for plain SMTP |
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MYSQL_PASSWORD` | `<password_for_mysql>` | Set in the script: your Plesk MySQL admin password |
+| `MYSQL_PORT` | `8306` | Plesk MySQL port (set in the script) |
+| `DOMAIN` | none | Domain to monitor; the first argument overrides it |
+| `NOTIFY_EMAIL` | none | Alert recipient; the second argument overrides it |
+| `SMTP_SERVER` | `mail.example.com` | External SMTP relay hostname |
+| `SMTP_PORT` | `25` | Typically `25`, `465` (SSL) or `587` (STARTTLS) |
+| `SMTP_AUTH_USER` / `SMTP_AUTH_PASS` | blank | Relay credentials; leave blank if not required |
+| `SMTP_SECURE` | blank | `ssl` or `starttls` if required; blank for plain SMTP |
+| `SMTP_FROM` | `plesk-monitor@<domain>` | Sender address |
+| `STATE_DIR` | `%TEMP%\plesk-monitor` | Directory for state files |
 
 > [!WARNING]
 > Never commit real passwords. Keep the `<password_for_mysql>` placeholder in the repository and edit only your server's copy.
