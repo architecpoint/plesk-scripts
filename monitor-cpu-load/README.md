@@ -59,7 +59,7 @@ Linux only (`monitor-cpu-load.sh`), AlmaLinux Plesk servers, root required. No W
 | `LOG_ROOT` | `/var/www/vhosts/system` | Plesk log root |
 | `STATE_DIR` | `/var/lib/plesk-cpu-monitor` | State directory |
 | `LOG_FILE` | `/var/log/plesk-cpu-monitor.log` | Incident log |
-| `SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`, `SMTP_FROM` | unset | SMTP relay, same as the [WordPress backup cleanup](../remove-old-wordpress-backups/README.md#configuration); falls back to the local `mail` command |
+| `SMTP_SERVER`, `SMTP_PORT`, `SMTP_AUTH_USER`, `SMTP_AUTH_PASS`, `SMTP_SECURE`, `SMTP_FROM` | unset; port `25`; sender `plesk-monitor@<hostname>` | SMTP relay, same as the [WordPress backup cleanup](../remove-old-wordpress-backups/README.md#configuration); falls back to the local `mail` command |
 | `AUTO_UPDATE` / `UPDATE_CHECK_INTERVAL` / `UPDATE_VERSION` | `false` / `24` / latest release | Self-update, see the [root README](../README.md#self-update) |
 
 **Command-line options:**
