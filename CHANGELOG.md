@@ -12,6 +12,11 @@ This project does not follow semantic versioning (it is a script collection, not
 - `AGENTS.md`, maintenance matrix, CI workflow, issue/PR templates, and this changelog (AI-ready repo setup).
 - `monitor-cpu-load/monitor-cpu-load.sh`: sustained CPU load monitor for AlmaLinux Plesk servers with per-subscription attribution, attack detection, fail2ban-aware alert suppression, and email alerts.
 - `GLOSSARY.md` with the domain terms for the CPU load monitor.
+- ADRs in `docs/adr/` for gated self-update from releases and for platform parity following the script's use case.
+
+### Changed
+
+- PID locking and `umask 077` are documented as conditional conventions, with a per-script table in `AGENTS.md`; platform parity applies only to scripts that already have a `.bat` pair.
 
 ## 2026-04-26
 

@@ -7,10 +7,10 @@ This is a collection of standalone automation scripts for Plesk server managemen
 ## Architecture Principles
 
 - **One-script-per-task**: Each directory contains a self-contained automation tool
-- **Dual platform support**: Most scripts come in pairs (`.bat` and `.sh`) with feature parity; some are single-platform where the task is OS-specific (e.g., `monitor-aspnet.bat` is Windows-only; `essential-plugin-scan.sh` targets Linux Plesk only)
+- **Platform support follows the use case**: only `mysql-backup` and `pci-dss-scan` ship both `.bat` and `.sh`; their pairs are kept in step, with the Windows version allowed to be a documented subset. New scripts are Linux-only by default (see `docs/adr/0002-platform-parity-follows-use-case.md`)
 - **No build system**: Direct shell/batch script execution, no compilation or bundling required
 - **Direct CLI integration**: Windows scripts use `%plesk_dir%` environment variable; Linux scripts use `/usr/sbin/plesk` CLI tool
-- **Safety-first design**: PID locking, validation checks, and error handling to prevent concurrent runs and data loss
+- **Safety-first design**: validation checks and error handling everywhere; PID locking and `umask 077` where the script can overlap itself or writes sensitive/shared state (see `AGENTS.md` for the per-script table)
 - **Security conscious**: Never hardcode credentials; use placeholders (`<password_for_mysql>`) or environment-based auth (`plesk db`)
 - **Self-updating bash scripts**: All Linux bash scripts include embedded self-update functionality for automatic updates from GitHub
 - **External tool dependency**: Scripts that perform HTTP checks (PCI-DSS scanner) depend on `curl` being available on the system
@@ -210,7 +210,7 @@ fi
 - Supports `AUTO_UPDATE=true` environment variable for automatic updates in cron
 - Configurable via `UPDATE_CHECK_INTERVAL` (hours) and `GITHUB_BRANCH` environment variables
 
-**PID locking pattern** (see `mysql-backup.sh`):
+**PID locking pattern** (use when the script can run on a schedule and overlap itself, or writes shared state; see `mysql-backup.sh`):
 ```bash
 PIDFILE="${HOME}/mysql.pid"
 if [ -f "${PIDFILE}" ]; then
@@ -221,7 +221,7 @@ echo $$ > "${PIDFILE}"
 trap "rm -f ${PIDFILE}" EXIT
 ```
 
-**Security - restrictive permissions:**
+**Security - restrictive permissions** (use when the script writes backups, state or reports that may be sensitive):
 ```bash
 umask 077  # Create files with 600 permissions (owner read/write only)
 ```
@@ -327,8 +327,8 @@ Any script's env vars / CLI flags | That script's header comment block and its `
 
 1. **Windows path handling**: Forgetting delayed expansion causes failures with Plesk's default path `C:\Program Files (x86)\Plesk`
 2. **Credential security**: Never commit actual MySQL passwords or SMTP passwords; always use placeholders or environment-based auth
-3. **PID file cleanup**: Ensure `trap "rm -f ${PIDFILE}" EXIT` is set to prevent stale locks
-4. **Platform parity**: When adding features to a paired script, update **both** `.bat` and `.sh` versions; single-platform scripts are exempt
+3. **PID file cleanup**: In scripts that use a PID lock, ensure `trap "rm -f ${PIDFILE}" EXIT` is set to prevent stale locks
+4. **Platform parity**: Only `mysql-backup` and `pci-dss-scan` have `.bat` pairs; update both sides when changing those. Other scripts are Linux-only, and new scripts default to Linux-only
 5. **System database inclusion**: Always filter out `information_schema`, `performance_schema`, `phpmyadmin` in MySQL scripts
 6. **README sync**: Feature additions require README.md updates in the Features section
 7. **WSL environment**: User runs on Windows with `wsl.exe` — ensure Linux scripts are bash-compatible and use LF line endings
