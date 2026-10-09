@@ -7,6 +7,8 @@ This project does not follow semantic versioning (it is a script collection, not
 
 ## [Unreleased]
 
+## v2026.10.09-2
+
 ### Added
 
 - CI jobs `Gated self-update behaviour` (`.github/scripts/test-self-update.sh`, runs the updater against a stubbed `curl`) and `Lint workflows` (actionlint).
