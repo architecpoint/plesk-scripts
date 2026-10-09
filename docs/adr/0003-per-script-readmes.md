@@ -15,4 +15,4 @@ Each script is meant to be copied onto a server on its own, and its users are sy
 
 - Changing a script means editing its folder README, so the maintenance matrix in `AGENTS.md` points at folder READMEs.
 - Shared behaviour such as self-update is documented once in the root README and linked from each folder.
-- Environment variables are listed in both the script header and the folder README; there is no CI check for drift between them.
+- Environment variables are listed in both the script header and the folder README; `check-docs.sh` fails CI when a header variable is missing from the README. Defaults and descriptions are not checked.

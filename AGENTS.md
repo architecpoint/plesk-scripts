@@ -82,7 +82,7 @@ A new script | Root `README.md` Scripts table, the table above, and the PID lock
 
 ## CI and Releases
 
-CI runs shellcheck, the self-update drift check, the self-update test and actionlint; run the first three locally. Never tag releases by hand — merging the auto-opened "Release vYYYY.MM.DD" PR does it. Details are in `CONTRIBUTING.md` → **CI** and **Releases**.
+CI runs shellcheck, the self-update drift check, the self-update test and actionlint; run the first three and `.github/scripts/check-docs.sh` locally. Never tag releases by hand — merging the auto-opened "Release vYYYY.MM.DD" PR does it. Details are in `CONTRIBUTING.md` → **CI** and **Releases**.
 
 ## Adding a New Script
 

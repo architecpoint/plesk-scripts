@@ -87,6 +87,7 @@ Before opening a PR:
 2. Run the CI helpers locally:
    - `.github/scripts/check-self-update.sh`
    - `.github/scripts/test-self-update.sh`
+   - `.github/scripts/check-docs.sh`
 3. Test in a staging or dev Plesk environment and cover the error paths: missing credentials, an empty database list, a missing directory, and concurrent runs (PID lock).
 4. Check that files written on Linux have restrictive permissions (600).
 5. Test Windows scripts with paths containing spaces and parentheses.
@@ -99,6 +100,8 @@ Before opening a PR:
 - `.github/scripts/check-self-update.sh`: every script's self-update block matches `.github/self-update.template.sh`, `SCRIPT_RELATIVE_PATH` equals the file path, and `UPDATE_CHECK_FILE` is unique
 - `.github/scripts/test-self-update.sh`: runs the gated updater against a stubbed `curl` (update, pin, checksum mismatch, no release, bad version)
 - actionlint on the workflows
+
+`.github/workflows/docs.yml` runs `.github/scripts/check-docs.sh` (also on markdown-only changes): relative links resolve, every script folder has a `README.md`, and every env var in a script's header "Environment Variables" block appears in backticks in that README.
 
 ## Releases
 
@@ -120,4 +123,4 @@ Folder README template:
 6. Scheduling
 7. Troubleshooting
 
-Keep the env var table in the README in step with the script header. Update `GLOSSARY.md` when you introduce or change a domain term, and add an ADR in `docs/adr/` only for decisions that are hard to reverse, surprising without context, and the result of a real trade-off.
+List every header env var in the README table (CI enforces this). Update `GLOSSARY.md` when you introduce or change a domain term, and add an ADR in `docs/adr/` only for decisions that are hard to reverse, surprising without context, and the result of a real trade-off.
