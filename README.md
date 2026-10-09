@@ -193,7 +193,7 @@ AUTO_UPDATE=true ./pci-dss-scan/pci-dss-scan.sh https://example.com
 **Configuration:**
 - `AUTO_UPDATE` - Set to `true` to enable automatic updates (default: `false`)
 - `UPDATE_CHECK_INTERVAL` - Hours between update checks (default: `24`)
-- `GITHUB_BRANCH` - GitHub branch to update from (default: `main`)
+- `UPDATE_VERSION` - Release tag to install, e.g. `v2026.05.01` (default: latest release). Updates are downloaded from a GitHub release and verified against its `SHA256SUMS` before being installed; a failed check keeps the current version. Requires `sha256sum`.
 
 **How it works:**
 1. Each script contains embedded self-update functionality (no external dependencies)
@@ -471,7 +471,7 @@ UPDATE_CHECK_INTERVAL=168 AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
 **Problem:** Script updated but using wrong branch
 ```bash
 # Specify branch explicitly (e.g., develop, main)
-GITHUB_BRANCH=develop AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
+UPDATE_VERSION=v2026.05.01 AUTO_UPDATE=true ./mysql-backups/mysql-backup.sh
 ```
 
 ### MySQL Backup Issues

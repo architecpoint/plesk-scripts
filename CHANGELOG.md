@@ -17,6 +17,8 @@ This project does not follow semantic versioning (it is a script collection, not
 
 ### Changed
 
+- Self-update is gated: scripts install only a GitHub release (latest, or `UPDATE_VERSION` to pin) after verifying it against the release's `SHA256SUMS`. `GITHUB_BRANCH` is removed (a notice is logged if set). **Servers must update once more after the first release** (`--update` still pulls from the old source until then; the first release is cut immediately after this merges).
+- Release automation: `release-pr.yml` opens a "Release vYYYY.MM.DD" PR on pushes to `main`; merging it runs `release.yml`, which creates the tag and release with `SHA256SUMS`.
 - PID locking and `umask 077` are documented as conditional conventions, with a per-script table in `AGENTS.md`; platform parity applies only to scripts that already have a `.bat` pair.
 
 ## 2026-04-26
