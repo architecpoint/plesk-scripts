@@ -262,6 +262,10 @@ fi
 # MAIN SCRIPT CONFIGURATION
 ###############################################################################
 
+# Cron's default PATH lacks /usr/sbin and /usr/local/sbin, where plesk and fail2ban-client live
+PATH="${PATH}:/usr/local/sbin:/usr/sbin:/sbin"
+export PATH
+
 EMAIL_TO="${EMAIL_TO:-}"
 LOAD_THRESHOLD_FACTOR="${LOAD_THRESHOLD_FACTOR:-1.0}"
 WINDOW_MINUTES="${WINDOW_MINUTES:-30}"
@@ -466,7 +470,7 @@ collect_cpu() {
         log_message "WARNING: plesk CLI not found, CPU cannot be attributed to subscriptions"
     fi
 
-    awk -F'\t' 'FNR == NR { owner[$1] = $2; next }
+    awk -F'\t' 'FILENAME == ARGV[1] { owner[$1] = $2; next }
         { split($0, f, " "); name = (f[1] in owner) ? owner[f[1]] : f[1]; cpu[name] += f[2]; mapped[name] = (f[1] in owner) }
         END { for (k in cpu) printf "%s %.1f %d\n", k, cpu[k], mapped[k] }' \
         "${WORK}/login2sub" "${WORK}/proc_user_cpu" | sort -k2,2nr > "${WORK}/sub_cpu"
