@@ -7,6 +7,10 @@ This project does not follow semantic versioning (it is a script collection, not
 
 ## [Unreleased]
 
+### Fixed
+
+- `monitor-cpu-load.sh`: add `/usr/sbin` to `PATH` so `plesk` and `fail2ban-client` are found under cron, and no longer drop all CPU rows when the subscription owner map is empty. Alerts previously showed an empty subscription table and "0 of 0 requests".
+
 ## v2026.10.09-3
 
 ### Removed
