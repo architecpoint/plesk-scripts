@@ -41,7 +41,8 @@ Linux only (`monitor-cpu-load.sh`), AlmaLinux Plesk servers, root required. No W
 
 - `[ALERT]`: sustained load that fail2ban is not handling; the email lists CPU per subscription, the busiest offenders (with the jails holding them) and the likely cause
 - `[NOTICE]`: fail2ban is banning the attack but load stayed high for another full window
-- `[REMINDER]` / `[RESOLVED]`: the incident is still ongoing (every `REMINDER_HOURS`), or load is back to normal
+- `[REMINDER]`: the incident is still ongoing (every `REMINDER_HOURS`); it repeats the full analysis
+- `[RESOLVED]`: load is back to normal; the email gives when it alerted and resolved, the peak load and its time, and the cause, CPU per subscription, offenders and processes captured at the peak
 
 ## Configuration
 
