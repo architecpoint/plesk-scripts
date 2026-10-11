@@ -295,6 +295,7 @@ SMTP_FROM="${SMTP_FROM:-}"
 
 SAMPLES_FILE="${STATE_DIR}/samples"
 STATE_FILE="${STATE_DIR}/state"
+PEAK_DIR="${STATE_DIR}/incident_peak"
 PIDFILE="${STATE_DIR}/monitor.pid"
 HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
 WORK=""
@@ -409,6 +410,8 @@ load_state() {
     INCIDENT_START=0
     LAST_ALERT_TS=0
     LAST_REMINDER_TS=0
+    INCIDENT_PEAK_LOAD=0
+    INCIDENT_PEAK_TS=0
     ALERT_SENT="false"
     [ -f "${STATE_FILE}" ] || return 0
 
@@ -425,9 +428,14 @@ load_state() {
                     ALERT_SENT="true"
                 fi
                 ;;
-            MITIGATED_SINCE|INCIDENT_START|LAST_ALERT_TS|LAST_REMINDER_TS)
+            MITIGATED_SINCE|INCIDENT_START|LAST_ALERT_TS|LAST_REMINDER_TS|INCIDENT_PEAK_TS)
                 if [[ "${value}" =~ ^[0-9]+$ ]]; then
                     printf -v "${key}" '%s' "${value}"
+                fi
+                ;;
+            INCIDENT_PEAK_LOAD)
+                if [[ "${value}" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                    INCIDENT_PEAK_LOAD="${value}"
                 fi
                 ;;
         esac
@@ -442,6 +450,8 @@ save_state() {
         echo "INCIDENT_START=${INCIDENT_START}"
         echo "LAST_ALERT_TS=${LAST_ALERT_TS}"
         echo "LAST_REMINDER_TS=${LAST_REMINDER_TS}"
+        echo "INCIDENT_PEAK_LOAD=${INCIDENT_PEAK_LOAD}"
+        echo "INCIDENT_PEAK_TS=${INCIDENT_PEAK_TS}"
         echo "ALERT_SENT=${ALERT_SENT}"
     } > "${STATE_FILE}.tmp"
     mv -f "${STATE_FILE}.tmp" "${STATE_FILE}"
@@ -635,23 +645,71 @@ build_html_report() {
     printf '<p><b>fail2ban:</b> banned offenders account for %s%% of attack traffic (%s of %s requests); handling threshold %s%%.</p>\n' \
         "${HANDLED_PCT}" "${BANNED_TOTAL}" "${ATTACK_TOTAL}" "${HANDLED_PERCENT}"
 
+    print_analysis_tables "${WORK}"
+    printf '</body></html>\n'
+}
+
+# Args: directory holding sub_cpu, sub_requests, offenders and proc_comm_cpu
+print_analysis_tables() {
+    local dir="$1"
     printf '<h3>CPU by subscription (%% of one core)</h3>\n'
-    head -n 10 "${WORK}/sub_cpu" | awk '{ printf "%s\t%s\t%s\n", $1, $2, ($3 == 1) ? "subscription" : "system user" }' \
+    head -n 10 "${dir}/sub_cpu" | awk '{ printf "%s\t%s\t%s\n", $1, $2, ($3 == 1) ? "subscription" : "system user" }' \
         | html_table "Subscription / user" "CPU %" "Type"
 
-    if [ -s "${WORK}/sub_requests" ]; then
+    if [ -s "${dir}/sub_requests" ]; then
         printf '<h3>Web requests in the last %s minutes (busiest subscriptions)</h3>\n' "${ANALYSIS_MINUTES}"
-        html_table "Subscription" "Requests" < "${WORK}/sub_requests"
+        html_table "Subscription" "Requests" < "${dir}/sub_requests"
     fi
 
-    if [ -s "${WORK}/offenders" ]; then
+    if [ -s "${dir}/offenders" ]; then
         printf '<h3>Top offenders</h3>\n'
-        head -n 10 "${WORK}/offenders" | awk -F'\t' '{ printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, ($5 == "-") ? "NOT banned" : "banned: " $5 }' \
+        head -n 10 "${dir}/offenders" | awk -F'\t' '{ printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, ($5 == "-") ? "NOT banned" : "banned: " $5 }' \
             | html_table "IP" "Requests" "401/403/404" "Probe hits" "fail2ban"
     fi
 
     printf '<h3>Top processes by command (%% of one core)</h3>\n'
-    head -n 5 "${WORK}/proc_comm_cpu" | awk '{ printf "%s\t%s\n", $1, $2 }' | html_table "Command" "CPU %"
+    head -n 5 "${dir}/proc_comm_cpu" | awk '{ printf "%s\t%s\n", $1, $2 }' | html_table "Command" "CPU %"
+}
+
+# Keeps the analysis from the highest-load run of the current incident for the [RESOLVED] email.
+update_incident_peak() {
+    if ! awk -v now="${LOAD_NOW}" -v peak="${INCIDENT_PEAK_LOAD}" 'BEGIN { exit !(now + 0 > peak + 0) }'; then
+        return 0
+    fi
+    local file
+    INCIDENT_PEAK_LOAD="${LOAD_NOW}"
+    INCIDENT_PEAK_TS=$(date +%s)
+    mkdir -p "${PEAK_DIR}"
+    for file in sub_cpu sub_requests offenders proc_comm_cpu; do
+        cp -f "${WORK}/${file}" "${PEAK_DIR}/${file}" 2>/dev/null || : > "${PEAK_DIR}/${file}"
+    done
+    printf '%s\n' "${CAUSE}" > "${PEAK_DIR}/cause"
+    printf '%s\t%s\t%s\n' "${HANDLED_PCT}" "${BANNED_TOTAL}" "${ATTACK_TOTAL}" > "${PEAK_DIR}/f2b"
+}
+
+# Args: incident duration in minutes
+build_resolved_report() {
+    local minutes="$1" peak_cause="" pct banned total
+    printf '<html><body style="font-family:sans-serif;font-size:14px;">\n<h2>CPU load back to normal</h2>\n'
+    printf '<p><b>Server:</b> %s<br><b>Load now:</b> %s (threshold %s = %s x %s cores)<br>' \
+        "$(html_escape "${HOSTNAME_SHORT}")" "${LOAD_NOW}" "${THRESHOLD}" "${LOAD_THRESHOLD_FACTOR}" "${CORES}"
+    printf '<b>Alerted at:</b> %s<br><b>Resolved at:</b> %s (about %s minutes later)<br>' \
+        "$(date -d "@${INCIDENT_START}" '+%Y-%m-%d %H:%M %Z')" "$(date '+%Y-%m-%d %H:%M %Z')" "${minutes}"
+    if [ "${INCIDENT_PEAK_TS}" -gt 0 ]; then
+        printf '<b>Peak load:</b> %s at %s<br>' "${INCIDENT_PEAK_LOAD}" "$(date -d "@${INCIDENT_PEAK_TS}" '+%H:%M')"
+    fi
+    if [ -r "${PEAK_DIR}/cause" ]; then
+        IFS= read -r peak_cause < "${PEAK_DIR}/cause" || true
+        printf '<b>Cause at peak:</b> %s' "$(html_escape "${peak_cause}")"
+    fi
+    printf '</p>\n'
+    if [ -r "${PEAK_DIR}/f2b" ]; then
+        IFS=$'\t' read -r pct banned total < "${PEAK_DIR}/f2b" || true
+        printf '<p><b>fail2ban at peak:</b> banned offenders accounted for %s%% of attack traffic (%s of %s requests).</p>\n' \
+            "${pct:-0}" "${banned:-0}" "${total:-0}"
+        printf '<h3>At the peak</h3>\n'
+        print_analysis_tables "${PEAK_DIR}"
+    fi
     printf '</body></html>\n'
 }
 
@@ -733,6 +791,9 @@ raise_incident() {
     STATE="incident"
     INCIDENT_START="${now}"
     ALERT_SENT="false"
+    INCIDENT_PEAK_LOAD=0
+    INCIDENT_PEAK_TS=0
+    rm -rf "${PEAK_DIR}"
 
     log_message "INCIDENT ${kind}: load=${LOAD_NOW} threshold=${THRESHOLD} cause=\"${CAUSE}\" banned=${HANDLED_PCT}% of ${ATTACK_TOTAL} attack requests top=$(head -n 3 "${WORK}/sub_cpu" | awk '{ printf "%s(%s%%) ", $1, $2 }')"
 
@@ -788,6 +849,10 @@ handle_sustained() {
             log_message "Incident ongoing: load=${LOAD_NOW} cause=\"${CAUSE}\""
             ;;
     esac
+
+    if [ "${STATE}" = "incident" ]; then
+        update_incident_peak
+    fi
 }
 
 handle_recovered() {
@@ -799,8 +864,9 @@ handle_recovered() {
             log_message "RESOLVED after ${minutes} minutes: load=${LOAD_NOW}"
             if [ "${ALERT_SENT}" = "true" ]; then
                 send_email "[RESOLVED] ${HOSTNAME_SHORT}: CPU load back to normal" \
-                    "<html><body style=\"font-family:sans-serif;font-size:14px;\"><h2>CPU load back to normal</h2><p>Load is ${LOAD_NOW} (threshold ${THRESHOLD}). The incident lasted about ${minutes} minutes.</p></body></html>" || true
+                    "$(build_resolved_report "${minutes}")" || true
             fi
+            rm -rf "${PEAK_DIR}"
             ;;
         mitigated)
             log_message "Load recovered after attack was handled by fail2ban"
@@ -809,6 +875,8 @@ handle_recovered() {
     STATE="normal"
     MITIGATED_SINCE=0
     INCIDENT_START=0
+    INCIDENT_PEAK_LOAD=0
+    INCIDENT_PEAK_TS=0
     ALERT_SENT="false"
 }
 
