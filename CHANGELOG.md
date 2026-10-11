@@ -7,6 +7,8 @@ This project does not follow semantic versioning (it is a script collection, not
 
 ## [Unreleased]
 
+## v2026.10.11
+
 ### Changed
 
 - `monitor-cpu-load.sh`: the `[RESOLVED]` email now reports when the incident was alerted and resolved, the peak load and its time, and the cause, CPU per subscription, offenders and top processes from the peak. The peak snapshot is kept in `STATE_DIR/incident_peak` while an incident is open.
